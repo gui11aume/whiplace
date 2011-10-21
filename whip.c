@@ -5,22 +5,18 @@
 #define BUFFER_SIZE 65536
 #define MIN_LENGTH 16
 
+
 int keycount(FILE*);
 int getkeys (FILE*, char**);
 int string_cmp(void*, void*);
 *char memclaim(*char, *int);
+
 
 char *keyArray[] = { "acorn", "good", "hear", "person",
    "soft", "with", "zeta" };
 char *valueArray[] = { "foo", "bad", "listen", "deer",
    "hard", "withou", "delta" };
 
-
-int string_cmp(const void *a, const void *b) { 
-   const char **ia = (const char **)a;
-   const char **ib = (const char **)b;
-   return strcmp(*ia, *ib);
-} 
 
 
 int keycount(FILE *keyfile) {
@@ -37,39 +33,31 @@ int keycount(FILE *keyfile) {
    char buffer[BUFFER_SIZE];
 
    /* Reset, count lines and reset. */
-   fseek(file, 0, SEEK_SET);
-   while(fgets(buffer, sizeof(buffer), file) != NULL) lc++;
-   fseek(file, 0, SEEK_SET);
+   fseek(keyfile, 0, SEEK_SET);
+   while(fgets(buffer, sizeof(buffer), keyfile) != NULL) lc++;
+   fseek(keyfile, 0, SEEK_SET);
 
    return lc;
 }
 
-char *memclaim(*char oldPtr, *int sizePtr) {
-/* Double the memory allocated to a pointer. */
 
-   *sizePtr *= 2;
+char **getkeys (char *fname) {
 
-   newPtr = (char *) malloc(*sizePtr * sizeof(char));
-   if (newPtr == NULL) exit(EXIT_FAILURE);
+   FILE *keyfile = fopen(fname, "r");
 
-   strcpy(newPtr, oldPtr);
-
-   free(oldPtr);
-   return newPtr;
-
-}
-
-int getkeys (FILE *keyfile, **char **keyArray) {
+   if (!keyfile) {
+      exit(EXIT_FAILURE);
+   }
 
    int nkeys = keycount(keyfile);
-   keyArray = (char **) malloc(nkeys * sizeof(char *);
-   
+   char **keyArray = (char **) malloc(nkeys * sizeof(char *));
+
    char line[BUFFER_SIZE];
-   int i = 0;
+   int j, i = 0;
 
    while (fgets(line, sizeof(line), keyfile) != NULL) {
-      size = MIN_LENGTH;
-      curPtr = (char *) malloc(size * sizeof(char));
+      int size = MIN_LENGTH;
+      char *curPtr = (char *) malloc(size * sizeof(char));
       if (curPtr == NULL) exit(EXIT_FAILURE);
       j = 0;
       while ((curPtr[j] = line[j++]) != '\0') {
@@ -80,12 +68,17 @@ int getkeys (FILE *keyfile, **char **keyArray) {
          }
       }
       curPtr[j] = '\0';
-      keyArray[i] = curPtr;
+      keyArray[i++] = curPtr;
    }
+
    fclose(keyfile);
+
+   return (keyArray);
 
    /* Sort the keys. */
    qsort(keyArray, nkeys, sizeof(char *), string_comp);
+
+}
 
 int keycheck(char **keyArray, int array_length) {
 /* Check that no key is masked by another. */
@@ -99,7 +92,7 @@ int keycheck(char **keyArray, int array_length) {
 }
 
 
-int comp (char *key, char *stream) {
+int keycomp (char *key, char *stream) {
 /*  Compare a key to a stream.Return -1, 0 or 1  */
 /*  with 0 if akey match is found in the stream. */
 
