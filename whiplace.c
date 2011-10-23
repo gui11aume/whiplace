@@ -7,6 +7,30 @@
 #define MIN_LENGTH 16
 
 
+#define USAGE "\n\
+whiplace: multiple stream replacement\n\
+\n\
+USAGE:\n\
+   whiplace keyfile targetfile\n\
+\n\
+whiplace performs 'stream' replacement, ie it replaces\n\
+the first ocurrence of any key by a specified value.\n\
+\n\
+keyfile must consist of one key-value pair per line,\n\
+separated by a single tab. Every occurrence of a key in\n\
+targetfile will be replaced by the corresponding value.\n\
+Specifying no value leads to deletion of the key, and\n\
+specifying no key is ignored.\n\
+\n\
+Key masking is also forbidden. A key is masked when\n\
+another key prevents any match with it. For example 'abcd'\n\
+is masked by 'abc', but not by 'bcd' because 'abcd' occurs\n\
+in the stream before. Note that key collision as shown in\n\
+the laste example are not checked for and can give unex-\n\
+pected results if overlooked.\n\n"
+
+
+
 typedef struct {
    string *keys;
    string *values;
@@ -38,18 +62,19 @@ int count_keys(FILE *keyfile) {
 
 
 void split(string* keys, string* values) {
-/* Split key-value pairs on the '~' character. */
+/* Split key-value pairs on tab. */
 
    int i, j;
    for (i = 0 ; keys[i] != NULL ; i++) {
-      for (j = 0 ; keys[i][j] != '~' ; j++) {
+      for (j = 0 ; keys[i][j] != '\t' ; j++) {
          if (keys[i][j] == '\0') {
-            /* Line i misses '~' (ill-formated). */
+            /* Line i misses tab (ill-formated). */
             fprintf(
                stderr,
-               "missing '~' in key-value file line %d (%s)\n",
-               i, keys[i]
+               "missing tab in keyfile line %d (%s)\n",
+               i+1, keys[i]
             );
+            fprintf(stderr, USAGE);
             exit(EXIT_FAILURE);
          }
       }
@@ -61,8 +86,10 @@ void split(string* keys, string* values) {
 
 
 int keycomp (string key, string stream) {
-/*  Compare a key to a stream.Return -1, 0 or 1  */
-/*  with 0 if akey match is found in the stream. */
+/* 
+ * Compare a key to a stream.Return -1, 0 or 1
+ * with 0 if akey match is found in the stream.
+ */
 
    int i = 0;
 
@@ -85,6 +112,7 @@ keyval get_key_values (const string fname) {
 
    if (!keyfile) {
       fprintf(stderr, "cannot open file %s\n", fname);
+      fprintf(stderr, USAGE);
       exit(EXIT_FAILURE);
    }
 
@@ -128,12 +156,6 @@ keyval get_key_values (const string fname) {
    /* Sort the key-values strings. */
    strsort(keys, nkeys);
 
-   if ((i = keycheck(keys)) > 0) {
-      fprintf(stderr, "key '%s' masked by key '%s'\n",
-            keys[i-1], keys[i]);
-      exit(EXIT_FAILURE);
-   }
-
    keyval kv = { 
       .keys = keys, 
       .values = values,
@@ -148,18 +170,18 @@ keyval get_key_values (const string fname) {
 
 int keycheck(string *keys) {
 /* 
- * Check that no key is masked by another. Return 0
+ * Check that no key is masked by another. Return -1
  * if OK, the index of the masked key otherwise.
  */
 
    int i;
    for (i = 0 ; keys[i+1] != NULL ; i++) {
-      if (keycomp(keys[i], keys[i+1]) != 0) {
+      if (keycomp(keys[i], keys[i+1]) == 0) {
          return i;
       }
    }
 
-   return 0;
+   return -1;
 
 }
 
@@ -265,16 +287,46 @@ void whiplace(FILE *streamf, keyval kv) {
 
 int main (int argc, string argv[]) {
 
-   string keyfile = argv[1];
-   string targetfile = argv[2];
+   int i, j;
+   char checkkeys = 0;
+   string keyfile = NULL;
+   FILE *streamf = stdin;
 
-   FILE *streamf = fopen(targetfile, "r");
-   if (streamf == NULL) {
-      fprintf(stderr, "cannot open file %s\n", targetfile);
+   /* Options and arguments processing. */
+   for (i = 1 ; i < argc ; i++) {
+      if (strcmp(argv[i], "--key-check") == 0) {
+         checkkeys = 1;
+      }
+      else if (keyfile == NULL) {
+         keyfile = argv[i];
+      }
+      else {
+         streamf = fopen(argv[i], "r");
+         if (streamf == NULL) {
+            fprintf(stderr, "cannot open file %s\n", argv[i]);
+            fprintf(stderr, USAGE);
+            exit(EXIT_FAILURE);
+         }
+      }
+   }
+
+   if (keyfile == NULL) {
+      fprintf(stderr, USAGE);
       exit(EXIT_FAILURE);
    }
 
    keyval kv = get_key_values(keyfile);
+
+   if (checkkeys) {
+      /* Key check requested. */
+      i = 0;
+      while ((j = keycheck(kv.keys + i)) > -1) {
+         printf("%s\t%s\n", kv.keys[i+j], kv.keys[i+j+1]);
+         i += j+1;
+      }
+      exit(EXIT_SUCCESS);
+   }
+
    whiplace(streamf, kv);
 
    exit(EXIT_SUCCESS);
