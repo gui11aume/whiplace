@@ -1,1 +1,9 @@
-C code for whiplace.
+Whiplace performs fast stream multiple replacement.
+Get the source code and history from github.com.
+
+git clone git@github.com:gui11aume/whiplace.git
+cd whiplace
+make
+./whiplace
+./whiplace --key-check tests/keytest.txt
+./whiplace tests/keytest.txt tests/targetest.txt
