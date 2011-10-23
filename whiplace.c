@@ -22,12 +22,20 @@ targetfile will be replaced by the corresponding value.\n\
 Specifying no value leads to deletion of the key, and\n\
 specifying no key is ignored.\n\
 \n\
-Key masking is also forbidden. A key is masked when\n\
-another key prevents any match with it. For example 'abcd'\n\
-is masked by 'abc', but not by 'bcd' because 'abcd' occurs\n\
-in the stream before. Note that key collision as shown in\n\
-the laste example are not checked for and can give unex-\n\
-pected results if overlooked.\n\n"
+A key is masked when another key prevents any match with\n\
+it. For example 'abcd' is masked by 'abc', but not by\n\
+'bcd' because 'abcd' can occur in the stream before\n\
+'bcd'.\n\
+You can check whether your keyfile contains masked keys\n\
+by using\n\
+\n\
+   whiplace --key-check keyfile\n\
+\n\
+which will output a list of masked key - masking key,\n\
+with one pair per line.\n\
+\n\
+Note that key collision like 'abcd' and 'bcd' are not\n\
+checked for and can give unexpected results if overlooked.\n\n"
 
 
 
