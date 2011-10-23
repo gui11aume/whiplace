@@ -1,8 +1,0 @@
-PYLIB = /usr/bin
-PYINC = /usr/include/python2.6
-
-whiplace.so: whiplace.c
-	gcc whiplace.c -g -I$(PYINC) -shared -L$(PYLIB) -lpython2.6 -o whiplace.so
-
-clean:
-	rm -f whiplace.dll core
