@@ -159,10 +159,10 @@ keyval get_key_values (const string fname) {
 
    fclose(keyfile);
 
-
-   split(keys, values);
-   /* Sort the key-values strings. */
+   /* Sort ans split the key-values strings. */
    strsort(keys, nkeys);
+   split(keys, values);
+
 
    keyval kv = { 
       .keys = keys, 
@@ -225,6 +225,7 @@ int bisect(string stream, keyval kv) {
             /* Same rationale as above. */
             break;
          case  0:
+            /* Found a match. */
             return replace((up + down)/2, kv);
       }
    }
@@ -333,6 +334,15 @@ int main (int argc, string argv[]) {
          i += j+1;
       }
       exit(EXIT_SUCCESS);
+   }
+   else {
+      /* Key masking. */
+      i = 0;
+      while ((j = keycheck(kv.keys + i)) > -1) {
+         kv.keys[i+j+1] = kv.keys[i+j];
+         kv.values[i+j+1] = kv.values[i+j];
+         i += j+1;
+      }
    }
 
    whiplace(streamf, kv);
