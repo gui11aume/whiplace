@@ -4,7 +4,6 @@
 #include "dynstring.h"
 
 #define BUFFER_SIZE 65536
-#define MIN_LENGTH 16
 
 
 #define USAGE "\n\
@@ -132,25 +131,27 @@ keyval get_key_values (const string fname) {
    int j, i = 0;
 
    while (fgets(line, sizeof(line), keyfile) != NULL) {
-      int size = MIN_LENGTH;
-      char *curPtr = (string) malloc(size * sizeof(char));
+
+      int llen = strlen(line);
+      if (llen >= BUFFER_SIZE) {
+         /* Too unlikely to fix (for now). */
+         fprintf(stderr, "%d characters! Is this a joke?\n", BUFFER_SIZE);
+         exit(EXIT_FAILURE);
+      }
+      /* Chomp. */
+      if (line[llen-1] == '\n') {
+         line[--llen] = '\0';
+      }
+
+      char *curPtr = (string) malloc((llen + 1) * sizeof(char));
       if (curPtr == NULL) {
          fprintf(stderr, "memory error\n");
          exit(EXIT_FAILURE);
       }
-      j = 0;
-      while ((curPtr[j] = line[j++]) != '\n') {
-         /* Get characters until we need more space. */
-         if (j > size - 1) {
-            /* Double string upon need. */
-            curPtr = (string) str_extend(curPtr, &size);
-         }
-      }
 
-      /* Remove the newline '\n' character if present. */
-      curPtr[j-1] = '\0';
-
+      strcpy(curPtr, line);
       keys[i++] = curPtr;
+
    }
 
    /* Sentinels */
