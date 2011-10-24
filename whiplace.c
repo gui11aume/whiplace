@@ -69,24 +69,35 @@ int count_keys(FILE *keyfile) {
 
 
 void split(string* keys, string* values) {
-/* Split key-value pairs on tab. */
+/* 
+ * Split key-value pairs on tab. Keys and values are
+ * read and sorted together as a single line for speed
+ * and memory efficiency. They are separated on the
+ * first tab by replacing it with '\0' and the value
+ * pointer is assigned to the next character.
+ */
 
-   int i, j;
+   int i, j, notab;
+
+   /* Run through the keys. */
    for (i = 0 ; keys[i] != NULL ; i++) {
-      for (j = 0 ; keys[i][j] != '\t' ; j++) {
-         if (keys[i][j] == '\0') {
-            /* Line i misses tab (ill-formated). */
-            fprintf(
-               stderr,
-               "missing tab in keyfile line %d (%s)\n",
-               i+1, keys[i]
-            );
-            fprintf(stderr, USAGE);
-            exit(EXIT_FAILURE);
+      notab = 1;
+      for (j = 0 ; j < strlen(keys[i]) ; j++) {
+         if (keys[i][j] == '\t') {
+            /* Found the tab. */
+            keys[i][j] = '\0';
+            values[i] = keys[i] + j+1;
+            notab = 0;
+            break;
          }
       }
-      keys[i][j] = '\0';
-      values[i] = keys[i] + j+1;
+      if (notab) {
+         /* Ooops, forgot the tab? */
+         fprintf(stderr, "no tab in line %d (%s)\n", i+1, keys[i]);
+         fprintf(stderr, USAGE);
+         exit(EXIT_FAILURE);
+      }
+      
    }
 
 }
@@ -103,6 +114,7 @@ int keycomp (string key, string stream) {
    while (key[i] == stream[i]) {
       i++;
       if (key[i] == '\0') {
+         /* Match until end. */
          return 0;
       }
    }
@@ -337,7 +349,10 @@ int main (int argc, string argv[]) {
       exit(EXIT_SUCCESS);
    }
    else {
-      /* Key masking. */
+     /*
+      * Manual key masking. This is required because a
+      * full match could be found by chance during bisecting.
+      */
       i = 0;
       while ((j = keycheck(kv.keys + i)) > -1) {
          kv.keys[i+j+1] = kv.keys[i+j];
