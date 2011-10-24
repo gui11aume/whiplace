@@ -124,16 +124,8 @@ int keycomp (string key, string stream) {
 }
 
 
-keyval get_key_values (const string fname) {
+keyval get_key_values (FILE *keyfile) {
 /* Read in key-value pairs from file, one pair per line. */
-
-   FILE *keyfile = fopen(fname, "r");
-
-   if (!keyfile) {
-      fprintf(stderr, "cannot open file %s\n", fname);
-      fprintf(stderr, USAGE);
-      exit(EXIT_FAILURE);
-   }
 
    const int nkeys = count_keys(keyfile);
    string *keys = (string *) malloc((nkeys+1) * sizeof(string));
@@ -188,7 +180,6 @@ keyval get_key_values (const string fname) {
 }
 
 
-
 int keycheck(string *keys) {
 /* 
  * Check that no key is masked by another. Return -1
@@ -205,6 +196,34 @@ int keycheck(string *keys) {
    return -1;
 
 }
+
+
+
+void mask_keys(keyval kv) {
+/*
+ * Key masking is required because a full match 
+ * could be found by chance during bisecting.
+ */
+   int j, i = 0;
+
+   while ((j = keycheck(kv.keys + i)) > -1) {
+     /* 
+      * Found a masked key. Replace it by the
+      * masking key (by pointer redirection).
+      */
+
+      /* Small profit :-) */
+      free(kv.keys[i+j+1]);
+      
+      kv.keys[i+j+1] = kv.keys[i+j];
+      kv.values[i+j+1] = kv.values[i+j];
+
+      i += j+1;
+
+   }
+}
+
+
 
 int replace(int index, keyval kv) {
 /*
@@ -257,6 +276,7 @@ int bisect(string stream, keyval kv) {
 
 }
 
+
 void whiplace(FILE *streamf, keyval kv) {
 
    char buffer[BUFFER_SIZE];
@@ -301,26 +321,24 @@ void whiplace(FILE *streamf, keyval kv) {
          i = 0;
 
       }
-
    } /* Hit EOF in buffer... We're done. */
-
 }
 
 
 int main (int argc, string argv[]) {
 
    int i, j;
-   char checkkeys = 0;
-   string keyfile = NULL;
+   char check_keys = 0;
+   string keyfname = NULL;
    FILE *streamf = stdin;
 
    /* Options and arguments processing. */
    for (i = 1 ; i < argc ; i++) {
       if (strcmp(argv[i], "--key-check") == 0) {
-         checkkeys = 1;
+         check_keys = 1;
       }
-      else if (keyfile == NULL) {
-         keyfile = argv[i];
+      else if (keyfname == NULL) {
+         keyfname = argv[i];
       }
       else {
          streamf = fopen(argv[i], "r");
@@ -332,14 +350,22 @@ int main (int argc, string argv[]) {
       }
    }
 
-   if (keyfile == NULL) {
+   if (keyfname == NULL) {
+      fprintf(stderr, USAGE);
+      exit(EXIT_FAILURE);
+   }
+
+   FILE *keyfile = fopen(keyfname, "r");
+
+   if (!keyfile) {
+      fprintf(stderr, "cannot open file %s\n", keyfname);
       fprintf(stderr, USAGE);
       exit(EXIT_FAILURE);
    }
 
    keyval kv = get_key_values(keyfile);
 
-   if (checkkeys) {
+   if (check_keys) {
       /* Key check requested. */
       i = 0;
       while ((j = keycheck(kv.keys + i)) > -1) {
@@ -349,16 +375,7 @@ int main (int argc, string argv[]) {
       exit(EXIT_SUCCESS);
    }
    else {
-     /*
-      * Manual key masking. This is required because a
-      * full match could be found by chance during bisecting.
-      */
-      i = 0;
-      while ((j = keycheck(kv.keys + i)) > -1) {
-         kv.keys[i+j+1] = kv.keys[i+j];
-         kv.values[i+j+1] = kv.values[i+j];
-         i += j+1;
-      }
+      mask_keys(kv);
    }
 
    whiplace(streamf, kv);
