@@ -1,9 +1,30 @@
 Whiplace performs fast stream multiple replacement.
 Get the source code and history from github.com.
 
+Getting started:
+
 git clone git@github.com:gui11aume/whiplace.git
 cd whiplace
 make
 ./whiplace
 ./whiplace --key-check tests/keytest.txt
 ./whiplace tests/keytest.txt tests/targetest.txt
+
+
+
+The key file must consist of one key-value pair per line,
+separated by a tab. Subsequent tabs, if any, will be part
+of the value. Keys specify what to match, values what to
+replace the match with. Specifying no value leads to
+deletion of the key (and lines with no key are ignored).
+
+If several keys match the same position, whiplace will
+use the longest (actually largest in dictionary order).
+For example, 'abc' and 'ab' are possible matches against
+'abcd'. In that case, 'abc' will be used and not 'ab',
+because the match is longer. So 'ab' is a match only when
+not followed by 'c', like in 'abde'.
+
+Note that in the previous example 'bcd' would not match
+'abcd' because 'abc' matches before, masking those letters
+from other possible matches.

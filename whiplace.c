@@ -3,39 +3,12 @@
 #include <stdlib.h>
 #include "dynstring.h"
 
-#define BUFFER_SIZE 65536
-
 
 #define USAGE "\n\
 whiplace: multiple stream replacement\n\
 \n\
 USAGE:\n\
-   whiplace keyfile targetfile\n\
-\n\
-whiplace performs 'stream' replacement, ie it replaces\n\
-the first ocurrence of any key by a specified value.\n\
-\n\
-keyfile must consist of one key-value pair per line,\n\
-separated by a single tab. Every occurrence of a key in\n\
-targetfile will be replaced by the corresponding value.\n\
-Specifying no value leads to deletion of the key, and\n\
-specifying no key is ignored.\n\
-\n\
-A key is masked when another key prevents any match with\n\
-it. For example 'abcd' is masked by 'abc', but not by\n\
-'bcd' because 'abcd' can occur in the stream before\n\
-'bcd'.\n\
-You can check whether your keyfile contains masked keys\n\
-by using\n\
-\n\
-   whiplace --key-check keyfile\n\
-\n\
-which will output a list of masked key - masking key,\n\
-with one pair per line.\n\
-\n\
-Note that key collision like 'abcd' and 'bcd' are not\n\
-checked for and can give unexpected results if overlooked.\n\n"
-
+   whiplace keyfile targetfile\n\n"
 
 
 typedef struct {
@@ -96,10 +69,8 @@ void split(string* keys, string* values) {
          fprintf(stderr, "no tab in line %d (%s)\n", i+1, keys[i]);
          fprintf(stderr, USAGE);
          exit(EXIT_FAILURE);
-      }
-      
+      }     
    }
-
 }
 
 
@@ -137,9 +108,10 @@ keyval get_key_values (FILE *keyfile) {
    while (fgets(line, sizeof(line), keyfile) != NULL) {
 
       int llen = strlen(line);
-      if (llen >= BUFFER_SIZE) {
+
+      if (llen >= BUFFER_SIZE - 1) {
          /* Too unlikely to fix (for now). */
-         fprintf(stderr, "%d characters! Is this a joke?\n", BUFFER_SIZE);
+         fprintf(stderr, "key-value line too long: %s", line);
          exit(EXIT_FAILURE);
       }
       /* Chomp. */
@@ -180,85 +152,31 @@ keyval get_key_values (FILE *keyfile) {
 }
 
 
-int keycheck(string *keys) {
-/* 
- * Check that no key is masked by another. Return -1
- * if OK, the index of the masked key otherwise.
- */
-
-   int i;
-   for (i = 0 ; keys[i+1] != NULL ; i++) {
-      if (keycomp(keys[i], keys[i+1]) == 0) {
-         return i;
-      }
-   }
-
-   return -1;
-
-}
-
-
-
-void mask_keys(keyval kv) {
-/*
- * Key masking is required because a full match 
- * could be found by chance during bisecting.
- */
-   int j, i = 0;
-
-   while ((j = keycheck(kv.keys + i)) > -1) {
-     /* 
-      * Found a masked key. Replace it by the
-      * masking key (by pointer redirection).
-      */
-
-      /* Small profit :-) */
-      free(kv.keys[i+j+1]);
-      
-      kv.keys[i+j+1] = kv.keys[i+j];
-      kv.values[i+j+1] = kv.values[i+j];
-
-      i += j+1;
-
-   }
-}
-
-
-
-int replace(int index, keyval kv) {
-/*
- * Print the replacement value and return the length
- * of the key (for skipping it from the stream).
- */
-
-   printf("%s", kv.values[index]);
-   return strlen(kv.keys[index]);
-
-}
-
-
-int bisect(string stream, keyval kv) {
+int match(string stream, keyval kv) {
 
    int down = 0;
    int up = kv.nkeys-1;
+   int tested = (up + down) / 2;
+
+   int match = -1;
 
    while (up > down) {
       switch (keycomp(kv.keys[(up+down)/2], stream)) {
-         case -1:
-            down = (up + down) / 2 + 1;
-           /*
-            * We just tested the key at position (up + down) /2
-            * and know it is too small. So we know the smallest
-            * possible key is one rank higher.
-            */
-            break;
-         case  1:
-            up = (up + down) / 2 - 1;
-            /* Same rationale as above. */
-            break;
          case  0:
             /* Found a match. */
-            return replace((up + down)/2, kv);
+            match = (up + down) / 2;
+            /* No break: we go on. */
+         case -1:
+           /* 
+            * The key is too small, we can skip this
+            * position already.
+            */
+            down = (up + down) / 2 + 1;
+            break;
+         case  1:
+            /* The key is too large, we can also skip. */
+            up = (up + down) / 2 - 1;
+            break;
       }
    }
   /*
@@ -267,95 +185,32 @@ int bisect(string stream, keyval kv) {
    * in the second, we're already done.
    */
    if ((up == down) && (keycomp(kv.keys[up], stream) == 0)) {
-       return replace(up, kv);
+       match = up;
    }
 
-   /* Still here? Then no match was found. */
-   printf("%c", stream[0]);
-   return 1;
+   return match;
 
 }
 
 
-void whiplace(FILE *streamf, keyval kv) {
 
-   char buffer[BUFFER_SIZE];
-
-   /* Initial read. */
-   int j = fread(buffer, 1, BUFFER_SIZE, streamf);
-
-   if (j < BUFFER_SIZE && feof(streamf)) {
-     /* 
-      * Hit the end of the file before the fun started.
-      * Write EOF in 'buffer' to stop the for loop.
-      */
-      buffer[j] = EOF;
-   }
-
-   int i = 0;
-   
-   while (buffer[i] != EOF) {
-
-      /* Most of the action happens in the following line. */
-      i += bisect(buffer + i, kv); 
-
-      /* Refill buffer when more than half way through it. */
-      if (i > BUFFER_SIZE / 2) {
-
-         /* Shift buffer */
-         for (j = i ; j < BUFFER_SIZE ; j++) {
-            buffer[j-i] = buffer[j];
-         }
-
-         /* Fill in buffer */
-         j = fread(buffer + j - i, 1, i, streamf);
-         if (j < i && feof(streamf)) {
-           /*
-            * Oops, hit the end of file: write EOF
-            * in 'buffer' to stop the for loop.
-            */
-            buffer[i+j-2] = EOF;
-         }
-
-         /* Buffer is full and we're back to square 1. */
-         i = 0;
-
-      }
-   } /* Hit EOF in buffer... We're done. */
-}
 
 
 int main (int argc, string argv[]) {
 
-   int i, j;
-   char check_keys = 0;
+   int i;
    string keyfname = NULL;
-   FILE *streamf = stdin;
 
    /* Options and arguments processing. */
-   for (i = 1 ; i < argc ; i++) {
-      if (strcmp(argv[i], "--key-check") == 0) {
-         check_keys = 1;
-      }
-      else if (keyfname == NULL) {
-         keyfname = argv[i];
-      }
-      else {
-         streamf = fopen(argv[i], "r");
-         if (streamf == NULL) {
-            fprintf(stderr, "cannot open file %s\n", argv[i]);
-            fprintf(stderr, USAGE);
-            exit(EXIT_FAILURE);
-         }
-      }
-   }
 
-   if (keyfname == NULL) {
+   if ((argc < 2) || (argc > 3)) {
       fprintf(stderr, USAGE);
       exit(EXIT_FAILURE);
    }
 
+   keyfname = argv[1];
    FILE *keyfile = fopen(keyfname, "r");
+   FILE *streamf = argc == 2 ? stdin : fopen(argv[2], "r");
 
    if (!keyfile) {
       fprintf(stderr, "cannot open file %s\n", keyfname);
@@ -363,22 +218,32 @@ int main (int argc, string argv[]) {
       exit(EXIT_FAILURE);
    }
 
+   if (streamf == NULL) {
+      fprintf(stderr, "cannot open file %s\n", argv[2]);
+      fprintf(stderr, USAGE);
+      exit(EXIT_FAILURE);
+   }
+
+   /* End of option parsing. */
+
+
    keyval kv = get_key_values(keyfile);
 
-   if (check_keys) {
-      /* Key check requested. */
-      i = 0;
-      while ((j = keycheck(kv.keys + i)) > -1) {
-         printf("%s\t%s\n", kv.keys[i+j], kv.keys[i+j+1]);
-         i += j+1;
-      }
-      exit(EXIT_SUCCESS);
-   }
-   else {
-      mask_keys(kv);
-   }
+   /* whiplace. */
+   string buffer = (string) shift(streamf, 0);
 
-   whiplace(streamf, kv);
+   while (buffer[0] != EOF) {
+      i = match(buffer, kv);
+      if (i > -1) {
+         /* Match found. */
+         fprintf(stdout, "%s", kv.values[i]);
+         buffer = (string) shift(streamf, strlen(kv.keys[i]));
+      }
+      else {
+         fprintf(stdout, "%c", buffer[0]);
+         buffer = (string) shift(streamf, 1);
+      }
+   }
 
    exit(EXIT_SUCCESS);
 }
