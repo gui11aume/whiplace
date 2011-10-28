@@ -11,11 +11,68 @@ USAGE:\n\
    whiplace keyfile targetfile\n\n"
 
 
+/* Array of key-value pairs. */
 typedef struct {
    string *keys;
    string *values;
    int nkeys;
 } keyval;
+
+/* Search tree node. */
+typedef struct {
+   bool starred;
+   char *chars;
+   struct keynode *next[];
+} keynode;
+
+void build_tree(struct keynode thisnode, int min, int max,
+      string *keys, int depth) {
+
+   /* Working arrays. */
+   char chars[256];
+   struct keynode *pointers[256];
+
+   /*
+    * If a key finishes here, the node
+    * is starred (and the key is skipped).
+    */
+
+   if (keys[min][depth] == '\0') {
+      thisnode.starred = 1;
+      min++;
+   }
+   else {
+      thisnode.starred = 0;
+   }
+
+   /* Gather letters at given depth. */
+
+   int i, j = 0;
+   char character = '\0';
+
+   for (i = min ; i < max + 1 ; i++) { 
+      /* Void if thisnode is a leaf. */
+      if (character !=  keys[i][depth]) {
+         character = keys[i][depth];
+         chars[j] = character;
+         pointers[j++] = \
+               (struct keynode *) malloc (sizeof(struct keynode));
+         /* Depth-first recursion. */
+         build_tree(*pointers[j], min, max, keys, depth+1);
+      }
+   }
+
+   thisnode.chars = (char *) malloc((j+1) * sizeof(char));
+   thisnode.next = \
+         (struct keynode **) malloc((j+1) * sizeof(struct keynode *));
+
+   strcpy(thisnode.chars, chars);
+   for (i = 0 ; i < j; i++) {
+      thisnode.next[j] = pointers[j];
+   }
+   thisnode.next[j] = NULL;
+}
+
 
 
 int count_keys(FILE *keyfile) {
