@@ -24,10 +24,7 @@ void strsort (string *str_array, int array_size) {
 
 
 string shift (FILE *streamf, int i) {
-/*
- * Stream the content of streamf through buffin.
- * Return the current character of the buffer.
- */
+/* Stream the content of streamf. */
 
    static char buffer[BUFFER_SIZE];
    static int pos = BUFFER_SIZE;
@@ -42,8 +39,7 @@ string shift (FILE *streamf, int i) {
       int j = fread(buffer + BUFFER_SIZE - pos, 1, pos, streamf);
 
       if (feof(streamf)) {
-         buffer[BUFFER_SIZE-pos+j-1] = '\0';
-         buffer[BUFFER_SIZE-pos+j] = EOF;
+         buffer[BUFFER_SIZE-pos+j] = '\0';
       }
 
       /* Buffer is full and we're back to square 1. */

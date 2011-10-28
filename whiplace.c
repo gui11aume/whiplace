@@ -194,8 +194,6 @@ int match(string stream, keyval kv) {
 
 
 
-
-
 int main (int argc, string argv[]) {
 
    int i;
@@ -226,13 +224,13 @@ int main (int argc, string argv[]) {
 
    /* End of option parsing. */
 
-
    keyval kv = get_key_values(keyfile);
+   close(keyfile);
 
    /* whiplace. */
    string buffer = (string) shift(streamf, 0);
 
-   while (buffer[0] != EOF) {
+   while (buffer[0] != '\0') {
       i = match(buffer, kv);
       if (i > -1) {
          /* Match found. */
@@ -244,6 +242,10 @@ int main (int argc, string argv[]) {
          buffer = (string) shift(streamf, 1);
       }
    }
+
+   /* Wrap up. */
+   close(streamf);
+   fflush(stdout);
 
    exit(EXIT_SUCCESS);
 }
