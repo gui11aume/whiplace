@@ -7,9 +7,7 @@ git clone git@github.com:gui11aume/whiplace.git
 cd whiplace
 make
 ./whiplace
-./whiplace --key-check tests/keytest.txt
 ./whiplace tests/keytest.txt tests/targetest.txt
-
 
 
 The key file must consist of one key-value pair per line,
