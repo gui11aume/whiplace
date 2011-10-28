@@ -18,6 +18,9 @@ of the value. Keys specify what to match, values what to
 replace the match with. Specifying no value leads to
 deletion of the key (and lines with no key are ignored).
 
+
+Maximal match
+
 If several keys match the same position, whiplace will
 use the longest (actually largest in dictionary order).
 For example, 'abc' and 'ab' are possible matches against
@@ -25,6 +28,16 @@ For example, 'abc' and 'ab' are possible matches against
 because the match is longer. So 'ab' is a match only when
 not followed by 'c', like in 'abde'.
 
+
+Match collisions
+
 Note that in the previous example 'bcd' would not match
 'abcd' because 'abc' matches before, masking those letters
 from other possible matches.
+
+
+Match protection
+
+If you want the occurrences of 'abc' to be replaced but
+not the occurrences of 'abcd', add a line to the key file
+where both key and value are 'abcd'.
