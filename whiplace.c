@@ -28,11 +28,13 @@ struct keynode {
 
 struct keynode build_tree(struct keynode *thisnode, int down, int up,
       string *keys, int depth) {
+/*
+ * Recursively build a key search-tree of keynodes.
+ */
 
-   /* Working arrays. */
+  /* Temp arrays. */
    char chars[256];
    int min[256], max[256];
-   struct keynode *pointers[256];
 
   /*
    * If a key finishes here, the key index
@@ -40,40 +42,56 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
    */
    (*thisnode).key = (keys[down][depth] == '\0') ? down++ : -1;
 
-   int i, j = 0;
-   char character = '\0';
+   if (down > up) { 
+  /* This is a leaf node. */
 
-   /* Gather letters at given depth (void if thisnode is a leaf). */
-   for (i = down ; i < up + 1 ; i++) {
-      if (character !=  keys[i][depth]) {
-         /* New character. */
-         character = keys[i][depth];
-         min[j] = i;
-         max[j] = i;
-         chars[j] = character;
-         pointers[j] = \
-               (struct keynode *) malloc (sizeof(struct keynode *));
-         j++;
-      }
-      else {
-         ++max[j-1];
-      }
+      (*thisnode).chars = (char *) malloc(sizeof(char));
+      (*thisnode).chars[0] = '\0';
+
+      (*thisnode).children = \
+         (struct keynode **) malloc(sizeof(struct keynode *));
+      (*thisnode).children[0] = NULL;
+
    }
+   else {
+  /* Not a leaf node. */
 
+      int i, j = 0;
+      chars[0] = keys[down][depth];
+      min[0] = max[0] = down;
 
-   (*thisnode).chars = (char *) malloc((j+1) * sizeof(char));
-   (*thisnode).children = \
-         (struct keynode **) malloc((j+1) * sizeof(struct keynode *));
+     /* Gather letters at given depth. */
+      for (i = down + 1 ; i < up + 1 ; i++) {
+         if (chars[j] !=  keys[i][depth]) {
+           /* New character. */
+            j++;
+            chars[j] = keys[i][depth];
+            min[j] = max[j] = i;
+         }
+         else {
+           /* Increment total count for character. */
+            ++max[j];
+         }
+      }
 
-   strcpy((*thisnode).chars, chars);
+     /* Now we know how much memory to allocate for children. */
+      (*thisnode).chars = (char *) malloc((j+2) * sizeof(char));
+      (*thisnode).children = \
+         (struct keynode **) malloc((j+2) * sizeof(struct keynode *));
 
-   for (i = 0 ; i < j ; i++) {
-      (*thisnode).children[i] = pointers[i];
-      /* Depth-first recursion. */
-      build_tree(pointers[i], min[i], max[i], keys, depth+1);
+      chars[j+1] = '\0';
+      strcpy((*thisnode).chars, chars);
+
+     /* Depth-first recursion. */
+      for (i = 0 ; i < j + 1 ; i++) {
+         (*thisnode).children[i] = \
+            (struct keynode *) malloc (sizeof(struct keynode *));
+         build_tree((*thisnode).children[i], min[i], max[i],
+            keys, depth + 1);
+      }
+     /* Sentinel. */
+      (*thisnode).children[i] = NULL;
    }
-   /* Sentinel. */
-   (*thisnode).children[i] = NULL;
 
 }
 
@@ -171,11 +189,11 @@ struct keyval get_key_values (FILE *keyfile) {
       int llen = strlen(line);
 
       if (llen >= BUFFER_SIZE - 1) {
-         /* Too unlikely to fix (for now). */
+        /* Too unlikely to fix (for now). */
          fprintf(stderr, "key-value line too long: %s", line);
          exit(EXIT_FAILURE);
       }
-      /* Chomp. */
+     /* Chomp. */
       if (line[llen-1] == '\n') {
          line[--llen] = '\0';
       }
@@ -191,13 +209,13 @@ struct keyval get_key_values (FILE *keyfile) {
 
    }
 
-   /* Sentinels */
+  /* Sentinels */
    keys[i] = NULL;
    values[i] = NULL;
 
    fclose(keyfile);
 
-   /* Sort ans split the key-values strings. */
+  /* Sort ans split the key-values strings. */
    strsort(keys, nkeys);
    split(keys, values);
 
