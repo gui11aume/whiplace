@@ -20,65 +20,60 @@ struct keyval {
 
 /* Search-tree node. */
 struct keynode {
-   char starred; // boolean
+   int key; // The key index, if any.
    char *chars;
-   struct keynode **next;
+   struct keynode **children;
 };
 
 
-struct keynode build_tree(struct keynode *thisnode, int min, int max,
+struct keynode build_tree(struct keynode *thisnode, int down, int up,
       string *keys, int depth) {
 
    /* Working arrays. */
    char chars[256];
-   int mins[256], maxs[256];
+   int min[256], max[256];
    struct keynode *pointers[256];
 
   /*
-   * If a key finishes here, the node
-   * is starred (and the key is skipped).
+   * If a key finishes here, the key index
+   * is specified (and the key is skipped).
    */
-   if (keys[min][depth] == '\0') {
-      (*thisnode).starred = 1;
-      min++;
-   }
-   else {
-      (*thisnode).starred = 0;
-   }
+   (*thisnode).key = (keys[down][depth] == '\0') ? down++ : -1;
 
    int i, j = 0;
    char character = '\0';
 
    /* Gather letters at given depth (void if thisnode is a leaf). */
-   for (i = min ; i < max+1 ; i++) {
+   for (i = down ; i < up + 1 ; i++) {
       if (character !=  keys[i][depth]) {
          /* New character. */
          character = keys[i][depth];
-         mins[j] = i;
-         maxs[j] = i;
+         min[j] = i;
+         max[j] = i;
          chars[j] = character;
-         pointers[j++] = \
+         pointers[j] = \
                (struct keynode *) malloc (sizeof(struct keynode *));
+         j++;
       }
       else {
-         maxs[j]++;
+         ++max[j-1];
       }
    }
-
 
 
    (*thisnode).chars = (char *) malloc((j+1) * sizeof(char));
-   (*thisnode).next = \
+   (*thisnode).children = \
          (struct keynode **) malloc((j+1) * sizeof(struct keynode *));
 
    strcpy((*thisnode).chars, chars);
-   for (i = 0 ; i < j; i++) {
-      (*thisnode).next[j] = pointers[j];
+
+   for (i = 0 ; i < j ; i++) {
+      (*thisnode).children[i] = pointers[i];
       /* Depth-first recursion. */
-      build_tree(pointers[i], mins[i], maxs[i], keys, depth+1);
+      build_tree(pointers[i], min[i], max[i], keys, depth+1);
    }
    /* Sentinel. */
-   (*thisnode).next[i] = NULL;
+   (*thisnode).children[i] = NULL;
 
 }
 
@@ -218,7 +213,39 @@ struct keyval get_key_values (FILE *keyfile) {
 }
 
 
-int match(string stream, struct keyval kv) {
+int match(string stream, struct keynode *node) {
+   int j, i = 0;
+   int match;
+   char t, c = stream[i];
+   int last_match = -1;
+   while(1) {
+      if ((*node).key > -1) {
+         last_match = (*node).key;
+      }
+      if ((*node).children[0] == NULL) {
+         break;
+      }
+      j = 0;
+      match = -1;
+      while ((t = (*node).chars[j++]) != '\0') {
+         if (c == t) {
+            match = j-1;
+            break;
+         }
+      }
+      if (match > -1) {
+         node = (*node).children[match];
+         c = stream[++i];
+      }
+      else {
+         break;
+      }
+   }
+   return last_match;
+}
+
+
+int bisect(string stream, struct keyval kv) {
 
    int down = 0;
    int up = kv.nkeys-1;
@@ -299,11 +326,14 @@ int main (int argc, string argv[]) {
          (struct keynode *) malloc(sizeof(struct keynode));
    build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
 
+   struct keynode *r = root;
+
+
    /* whiplace. */
    string buffer = (string) shift(streamf, 0);
 
    while (buffer[0] != '\0') {
-      i = match(buffer, kv);
+      i = match(buffer, root);
       if (i > -1) {
          /* Match found. */
          fprintf(stdout, "%s", kv.values[i]);
