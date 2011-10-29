@@ -28,7 +28,7 @@ int count_lines(FILE *keyfile) {
 
 }
 
-void split(string* keys, string* values, char c) {
+void split(string *keys, string *values, char c) {
 /* 
  * Split key-value pairs on char c. Keys and values are
  * read and sorted together as a single line for speed
@@ -52,8 +52,9 @@ void split(string* keys, string* values, char c) {
          }
       }
       if (no_c) {
-         /* Ooops, forgot the tab? */
-         fprintf(stderr, "no %c in line %d (%s)\n", c, i+1, keys[i]);
+         /* Ooops... */
+         fprintf(stderr, "no '%c' character in line %d (%s)\n",
+               c, i+1, keys[i]);
          exit(EXIT_FAILURE);
       }     
    }
@@ -105,5 +106,28 @@ string shift (FILE *streamf, int i) {
    /* Return the current buffer. */
    pos += i;
    return buffer + pos;
+
+}
+
+string readline(FILE *file, int chomp) {
+
+   char line[BUFFER_SIZE];
+   string s = fgets(line, sizeof(line), file);
+
+   int llen = strlen(line);
+
+   if (llen >= BUFFER_SIZE / 2 - 1) {
+     /* Too unlikely to fix (for now). */
+      fprintf(stderr, "line too long: %s", line);
+      exit(EXIT_FAILURE);
+   }
+
+   if (chomp) {
+      if (line[llen-1] == '\n') {
+         line[--llen] = '\0';
+      }
+   }
+
+   return s; // NULL if EOF.
 
 }

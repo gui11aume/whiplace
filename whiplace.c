@@ -27,6 +27,63 @@ struct keynode {
 
 
 
+/* Function declarations. */
+struct keyval get_key_values (FILE*);
+struct keynode build_tree(struct keynode*, int, int, string *, int);
+int find_char(char, string);
+int match(string, struct keynode*);
+
+
+struct keyval get_key_values (FILE *keyfile) {
+/* Read in key-value pairs from file, one pair per line. */
+
+   const int nkeys = count_lines(keyfile);
+   string *keys = (string *) malloc((nkeys+1) * sizeof(string));
+   string *values = (string *) malloc((nkeys+1) * sizeof(string));
+   if ((keys == NULL) || (values == NULL)) {
+      fprintf(stderr, "memory error\n");
+      exit(EXIT_FAILURE);
+   }
+
+   string line;
+   int j, i = 0;
+
+   /* Read and chomp lines from key file. */
+   while ((line = readline(keyfile, 1)) != NULL) {
+
+      /* Allocate memory for key + value. */
+      char *curPtr = (string) malloc((strlen(line) + 1) * sizeof(char));
+      if (curPtr == NULL) {
+         fprintf(stderr, "memory error\n");
+         exit(EXIT_FAILURE);
+      }
+
+      strcpy(curPtr, line);
+      keys[i++] = curPtr;
+
+   }
+
+  /* Sentinels */
+   keys[i] = NULL;
+   values[i] = NULL;
+
+   fclose(keyfile);
+
+  /* Sort ans split the key-values strings. */
+   strsort(keys, nkeys);
+   split(keys, values, '\t');
+
+   struct keyval kv = { 
+      .keys = keys, 
+      .values = values,
+      .nkeys = nkeys
+   };
+
+   return kv;
+
+}
+
+
 struct keynode build_tree(struct keynode *thisnode, int down, int up,
       string *keys, int depth) {
 /* Recursively build a key search-tree of keynodes. */
@@ -45,10 +102,14 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
   /* This is a leaf node. */
 
       (*thisnode).chars = (char *) malloc(sizeof(char));
-      (*thisnode).chars[0] = '\0';
-
       (*thisnode).children = \
          (struct keynode **) malloc(sizeof(struct keynode *));
+      if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
+         fprintf(stderr, "memory error\n");
+         exit(EXIT_FAILURE);
+      } 
+
+      (*thisnode).chars[0] = '\0';
       (*thisnode).children[0] = NULL;
 
    }
@@ -77,6 +138,10 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
       (*thisnode).chars = (char *) malloc((j+2) * sizeof(char));
       (*thisnode).children = \
          (struct keynode **) malloc((j+2) * sizeof(struct keynode *));
+      if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
+         fprintf(stderr, "memory error\n");
+         exit(EXIT_FAILURE);
+      } 
 
       chars[j+1] = '\0';
       strcpy((*thisnode).chars, chars);
@@ -85,6 +150,10 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
       for (i = 0 ; i < j + 1 ; i++) {
          (*thisnode).children[i] = \
             (struct keynode *) malloc (sizeof(struct keynode *));
+         if ((*thisnode).children[i] == NULL) {
+            fprintf(stderr, "memory error\n");
+            exit(EXIT_FAILURE);
+         } 
          build_tree((*thisnode).children[i], min[i], max[i],
             keys, depth + 1);
       }
@@ -95,63 +164,8 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
 }
 
 
-struct keyval get_key_values (FILE *keyfile) {
-/* Read in key-value pairs from file, one pair per line. */
 
-   const int nkeys = count_lines(keyfile);
-   string *keys = (string *) malloc((nkeys+1) * sizeof(string));
-   string *values = (string *) malloc((nkeys+1) * sizeof(string));
-
-   char line[BUFFER_SIZE];
-   int j, i = 0;
-
-   while (fgets(line, sizeof(line), keyfile) != NULL) {
-
-      int llen = strlen(line);
-
-      if (llen >= BUFFER_SIZE - 1) {
-        /* Too unlikely to fix (for now). */
-         fprintf(stderr, "key-value line too long: %s", line);
-         exit(EXIT_FAILURE);
-      }
-     /* Chomp. */
-      if (line[llen-1] == '\n') {
-         line[--llen] = '\0';
-      }
-
-      char *curPtr = (string) malloc((llen + 1) * sizeof(char));
-      if (curPtr == NULL) {
-         fprintf(stderr, "memory error\n");
-         exit(EXIT_FAILURE);
-      }
-
-      strcpy(curPtr, line);
-      keys[i++] = curPtr;
-
-   }
-
-  /* Sentinels */
-   keys[i] = NULL;
-   values[i] = NULL;
-
-   fclose(keyfile);
-
-  /* Sort ans split the key-values strings. */
-   strsort(keys, nkeys);
-   split(keys, values, '\t');
-
-
-   struct keyval kv = { 
-      .keys = keys, 
-      .values = values,
-      .nkeys = nkeys
-   };
-
-   return kv;
-
-}
-
-int find(char c, string sorted_keys) {
+int find_char(char c, string sorted_keys) {
 /*
  * Find char c in sorted string by bisection. Return
  * its index in sorted_keys if match, -1 otherwise.
@@ -189,6 +203,7 @@ int find(char c, string sorted_keys) {
 }
 
 
+
 int match(string stream, struct keynode *node) {
 /*
  * Match the current position of the stream with
@@ -205,7 +220,7 @@ int match(string stream, struct keynode *node) {
          keymatch = (*node).key;
       }
       /* Find char match. */
-      charmatch = find(c, (*node).chars);
+      charmatch = find_char(c, (*node).chars);
       if (charmatch > -1) {
          node = (*node).children[charmatch];
          c = stream[++i];
@@ -220,6 +235,7 @@ int match(string stream, struct keynode *node) {
    return keymatch;
 
 }
+
 
 
 int main (int argc, string argv[]) {
@@ -252,16 +268,19 @@ int main (int argc, string argv[]) {
 
    /* (End of option parsing). */
 
-   /* Get and sort key+values. */
+   /* Get and sort keys + values. */
    struct keyval kv = get_key_values(keyfile);
    close(keyfile);
 
    /* Build the key tree. */
    struct keynode *root = \
          (struct keynode *) malloc(sizeof(struct keynode));
-   build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
+   if (root == NULL) {
+      fprintf(stderr, "memory error\n");
+      exit(EXIT_FAILURE);
+   }
 
-   struct keynode *r = root;
+   build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
 
 
    /* whiplace. */
@@ -270,7 +289,7 @@ int main (int argc, string argv[]) {
    while (buffer[0] != '\0') {
       i = match(buffer, root);
       if (i > -1) {
-         /* Match found. */
+         /* Found a match. */
          fprintf(stdout, "%s", kv.values[i]);
          buffer = (string) shift(streamf, strlen(kv.keys[i]));
       }
