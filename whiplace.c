@@ -26,12 +26,13 @@ struct keynode {
 };
 
 
-
 /* Function declarations. */
 struct keyval get_key_values (FILE*);
 struct keynode build_tree(struct keynode*, int, int, string *, int);
 int find_char(char, string);
 int match(string, struct keynode*);
+
+
 
 
 struct keyval get_key_values (FILE *keyfile) {
@@ -98,20 +99,28 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
    */
    (*thisnode).key = (keys[down][depth] == '\0') ? down++ : -1;
 
-   if (down > up) { 
-  /* This is a leaf node. */
 
-      (*thisnode).chars = (char *) malloc(sizeof(char));
+   /* -- DRY function for memory allocation. -- */
+   void allocate(int k) {
+     /* Allocate memory for characters and children. */ 
+      (*thisnode).chars = (char *) malloc((k+1) * sizeof(char));
       (*thisnode).children = \
-         (struct keynode **) malloc(sizeof(struct keynode *));
+         (struct keynode **) malloc((k+1) * sizeof(struct keynode *));
       if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
          fprintf(stderr, "memory error\n");
          exit(EXIT_FAILURE);
       } 
+     /* Add the sentinels. */
+      chars[k] = '\0';
+      strcpy((*thisnode).chars, chars);
+      (*thisnode).children[k] = NULL;
+   }
+   /* -- End of DRY function. -- */
 
-      (*thisnode).chars[0] = '\0';
-      (*thisnode).children[0] = NULL;
 
+   if (down > up) { 
+  /* This is a leaf node. */
+      allocate(0);
    }
    else {
   /* Not a leaf node. */
@@ -120,7 +129,7 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
       chars[0] = keys[down][depth];
       min[0] = max[0] = down;
 
-     /* Gather letters at given depth. */
+     /* Gather and count letters at given depth. */
       for (i = down + 1 ; i < up + 1 ; i++) {
          if (chars[j] !=  keys[i][depth]) {
            /* New character. */
@@ -134,17 +143,8 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
          }
       }
 
-     /* Now we know how much memory to allocate for children. */
-      (*thisnode).chars = (char *) malloc((j+2) * sizeof(char));
-      (*thisnode).children = \
-         (struct keynode **) malloc((j+2) * sizeof(struct keynode *));
-      if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
-         fprintf(stderr, "memory error\n");
-         exit(EXIT_FAILURE);
-      } 
-
-      chars[j+1] = '\0';
-      strcpy((*thisnode).chars, chars);
+     /* Allocate memory for children. */
+      allocate(j+1);
 
      /* Depth-first recursion. */
       for (i = 0 ; i < j + 1 ; i++) {
@@ -157,10 +157,7 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
          build_tree((*thisnode).children[i], min[i], max[i],
             keys, depth + 1);
       }
-     /* Sentinel. */
-      (*thisnode).children[i] = NULL;
    }
-
 }
 
 
