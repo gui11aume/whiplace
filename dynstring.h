@@ -13,9 +13,9 @@ typedef struct {
 } buffin;
 */
 int count_lines(FILE*);
-void split(string*, string*, char);
-void strsort(string*, int);
-string shift (FILE*, int);
-string readline(FILE*, int);
+void split(const string*, string*, const char);
+void strsort(string*, const int);
+string shift (FILE*, const int);
+string readline(FILE*, const int);
 
 #endif

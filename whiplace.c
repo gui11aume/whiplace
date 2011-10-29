@@ -28,9 +28,10 @@ struct keynode {
 
 /* Function declarations. */
 struct keyval get_key_values (FILE*);
-struct keynode build_tree(struct keynode*, int, int, string *, int);
-int find_char(char, string);
-int match(string, struct keynode*);
+struct keynode build_tree(struct keynode*, int, const int,
+      const string*, const int);
+int find_char(const char, const string);
+int match(const string, struct keynode*);
 
 
 
@@ -39,8 +40,8 @@ struct keyval get_key_values (FILE *keyfile) {
 /* Read in key-value pairs from file, one pair per line. */
 
    const int nkeys = count_lines(keyfile);
-   string *keys = (string *) malloc((nkeys+1) * sizeof(string));
-   string *values = (string *) malloc((nkeys+1) * sizeof(string));
+   string *keys = (string * const) malloc((nkeys+1) * sizeof(string));
+   string *values = (string * const) malloc((nkeys+1) * sizeof(string));
    if ((keys == NULL) || (values == NULL)) {
       fprintf(stderr, "memory error\n");
       exit(EXIT_FAILURE);
@@ -85,8 +86,8 @@ struct keyval get_key_values (FILE *keyfile) {
 }
 
 
-struct keynode build_tree(struct keynode *thisnode, int down, int up,
-      string *keys, int depth) {
+struct keynode build_tree(struct keynode *thisnode, int down, const int up,
+      const string *keys, const int depth) {
 /* Recursively build a key search-tree of keynodes. */
 
   /* Temp arrays. */
@@ -103,9 +104,9 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
    /* -- DRY function for memory allocation. -- */
    void allocate(int k) {
      /* Allocate memory for characters and children. */ 
-      (*thisnode).chars = (char *) malloc((k+1) * sizeof(char));
+      (*thisnode).chars = (char * const) malloc((k+1) * sizeof(char));
       (*thisnode).children = \
-         (struct keynode **) malloc((k+1) * sizeof(struct keynode *));
+         (struct keynode ** const) malloc((k+1) * sizeof(struct keynode *));
       if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
          fprintf(stderr, "memory error\n");
          exit(EXIT_FAILURE);
@@ -149,7 +150,7 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
      /* Depth-first recursion. */
       for (i = 0 ; i < j + 1 ; i++) {
          (*thisnode).children[i] = \
-            (struct keynode *) malloc (sizeof(struct keynode *));
+            (struct keynode * const) malloc (sizeof(struct keynode *));
          if ((*thisnode).children[i] == NULL) {
             fprintf(stderr, "memory error\n");
             exit(EXIT_FAILURE);
@@ -162,7 +163,7 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
 
 
 
-int find_char(char c, string sorted_keys) {
+int find_char(const char c, const string sorted_keys) {
 /*
  * Find char c in sorted string by bisection. Return
  * its index in sorted_keys if match, -1 otherwise.
@@ -201,7 +202,7 @@ int find_char(char c, string sorted_keys) {
 
 
 
-int match(string stream, struct keynode *node) {
+int match(const string stream, struct keynode *node) {
 /*
  * Match the current position of the stream with
  * the key tree. Return -1 if no match is found,
@@ -266,11 +267,11 @@ int main (int argc, string argv[]) {
    /* (End of option parsing). */
 
    /* Get and sort keys + values. */
-   struct keyval kv = get_key_values(keyfile);
+   const struct keyval kv = get_key_values(keyfile);
    close(keyfile);
 
    /* Build the key tree. */
-   struct keynode *root = \
+   struct keynode * const root = \
          (struct keynode *) malloc(sizeof(struct keynode));
    if (root == NULL) {
       fprintf(stderr, "memory error\n");

@@ -28,7 +28,7 @@ int count_lines(FILE *keyfile) {
 
 }
 
-void split(string *keys, string *values, char c) {
+void split(const string *keys, string *values, const char c) {
 /* 
  * Split key-value pairs on char c. Keys and values are
  * read and sorted together as a single line for speed
@@ -72,7 +72,7 @@ int strings_comp(const void *a, const void *b) {
 }
 
 
-void strsort (string *str_array, int array_size) {
+void strsort (string *str_array, const int array_size) {
 /* Wrapper for sorting arrays of strings in place. */
 
    qsort(str_array, array_size, sizeof(char *), strings_comp);
@@ -80,12 +80,11 @@ void strsort (string *str_array, int array_size) {
 }
 
 
-string shift (FILE *streamf, int i) {
+string shift (FILE *streamf, const int i) {
 /* Stream the content of streamf. */
 
    static char buffer[BUFFER_SIZE];
    static int pos = BUFFER_SIZE;
-
 
    if (pos > BUFFER_SIZE / 2 && !feof(streamf)) {
 
@@ -109,12 +108,12 @@ string shift (FILE *streamf, int i) {
 
 }
 
-string readline(FILE *file, int chomp) {
+string readline(FILE *file, const int chomp) {
 
    char line[BUFFER_SIZE];
-   string s = fgets(line, sizeof(line), file);
+   const string s = fgets(line, sizeof(line), file);
 
-   int llen = strlen(line);
+   const int llen = strlen(line);
 
    if (llen >= BUFFER_SIZE / 2 - 1) {
      /* Too unlikely to fix (for now). */
@@ -123,8 +122,8 @@ string readline(FILE *file, int chomp) {
    }
 
    if (chomp) {
-      if (line[llen-1] == '\n') {
-         line[--llen] = '\0';
+      if (line[llen - 1] == '\n') {
+         line[llen - 1] = '\0';
       }
    }
 
