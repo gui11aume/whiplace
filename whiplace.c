@@ -26,11 +26,10 @@ struct keynode {
 };
 
 
+
 struct keynode build_tree(struct keynode *thisnode, int down, int up,
       string *keys, int depth) {
-/*
- * Recursively build a key search-tree of keynodes.
- */
+/* Recursively build a key search-tree of keynodes. */
 
   /* Temp arrays. */
    char chars[256];
@@ -96,88 +95,10 @@ struct keynode build_tree(struct keynode *thisnode, int down, int up,
 }
 
 
-
-int count_keys(FILE *keyfile) {
-/* 
- * Use 'fgets' to run through the lines of keyfile.
- * We need a big buffer to ensure that we hit an end of line
- * on every call. The cost in memory is 65 Kb, which are freed
- * upon return. This is affordable. This code is almost as
- * fast as UNIX 'wc -l', and much faster than reading characters
- * one by one.
- */
-
-   int lc = 0;
-   char buffer[BUFFER_SIZE];
-
-   /* Count lines and reset. */
-   while(fgets(buffer, sizeof(buffer), keyfile) != NULL) lc++;
-   fseek(keyfile, 0, SEEK_SET);
-
-   return lc;
-
-}
-
-
-
-void split(string* keys, string* values) {
-/* 
- * Split key-value pairs on tab. Keys and values are
- * read and sorted together as a single line for speed
- * and memory efficiency. They are separated on the
- * first tab by replacing it with '\0' and the value
- * pointer is assigned to the next character.
- */
-
-   int i, j, notab;
-
-   /* Run through the keys. */
-   for (i = 0 ; keys[i] != NULL ; i++) {
-      notab = 1;
-      for (j = 0 ; j < strlen(keys[i]) ; j++) {
-         if (keys[i][j] == '\t') {
-            /* Found the tab. */
-            keys[i][j] = '\0';
-            values[i] = keys[i] + j+1;
-            notab = 0;
-            break;
-         }
-      }
-      if (notab) {
-         /* Ooops, forgot the tab? */
-         fprintf(stderr, "no tab in line %d (%s)\n", i+1, keys[i]);
-         fprintf(stderr, USAGE);
-         exit(EXIT_FAILURE);
-      }     
-   }
-}
-
-
-int keycomp (string key, string stream) {
-/* 
- * Compare a key to a stream.Return -1, 0 or 1
- * with 0 if akey match is found in the stream.
- */
-
-   int i = 0;
-
-   while (key[i] == stream[i]) {
-      i++;
-      if (key[i] == '\0') {
-         /* Match until end. */
-         return 0;
-      }
-   }
-
-   return key[i] < stream[i] ? -1 : 1;
-
-}
-
-
 struct keyval get_key_values (FILE *keyfile) {
 /* Read in key-value pairs from file, one pair per line. */
 
-   const int nkeys = count_keys(keyfile);
+   const int nkeys = count_lines(keyfile);
    string *keys = (string *) malloc((nkeys+1) * sizeof(string));
    string *values = (string *) malloc((nkeys+1) * sizeof(string));
 
@@ -217,7 +138,7 @@ struct keyval get_key_values (FILE *keyfile) {
 
   /* Sort ans split the key-values strings. */
    strsort(keys, nkeys);
-   split(keys, values);
+   split(keys, values, '\t');
 
 
    struct keyval kv = { 
@@ -230,64 +151,29 @@ struct keyval get_key_values (FILE *keyfile) {
 
 }
 
-
-int match(string stream, struct keynode *node) {
-   int j, i = 0;
-   int match;
-   char t, c = stream[i];
-   int last_match = -1;
-   while(1) {
-      if ((*node).key > -1) {
-         last_match = (*node).key;
-      }
-      if ((*node).children[0] == NULL) {
-         break;
-      }
-      j = 0;
-      match = -1;
-      while ((t = (*node).chars[j++]) != '\0') {
-         if (c == t) {
-            match = j-1;
-            break;
-         }
-      }
-      if (match > -1) {
-         node = (*node).children[match];
-         c = stream[++i];
-      }
-      else {
-         break;
-      }
-   }
-   return last_match;
-}
-
-
-int bisect(string stream, struct keyval kv) {
+int find(char c, string sorted_keys) {
+/*
+ * Find char c in sorted string by bisection. Return
+ * its index in sorted_keys if match, -1 otherwise.
+ */
 
    int down = 0;
-   int up = kv.nkeys-1;
-   int tested = (up + down) / 2;
-
-   int match = -1;
+   int up = strlen(sorted_keys) - 1;
+   int diff;
 
    while (up > down) {
-      switch (keycomp(kv.keys[(up+down)/2], stream)) {
-         case  0:
-            /* Found a match. */
-            match = (up + down) / 2;
-            /* No break: we go on. */
-         case -1:
-           /* 
-            * The key is too small, we can skip this
-            * position already.
-            */
-            down = (up + down) / 2 + 1;
-            break;
-         case  1:
-            /* The key is too large, we can also skip. */
-            up = (up + down) / 2 - 1;
-            break;
+      diff = sorted_keys[(up+down)/2] - c; 
+      if (diff < 0) {
+        /* The key is too small, we can it. */
+         down = (up + down) / 2 + 1;
+      }
+      else if (diff > 0) {
+        /* The key is too large, we can also skip. */
+         up = (up + down) / 2 - 1;
+      }
+      else {
+        /* Found the match. */
+         return (up + down) / 2;
       }
    }
   /*
@@ -295,14 +181,45 @@ int bisect(string stream, struct keyval kv) {
    * In the first case we need to check one last key,
    * in the second, we're already done.
    */
-   if ((up == down) && (keycomp(kv.keys[up], stream) == 0)) {
-       match = up;
+   if ((up == down) && (sorted_keys[up] == c)) {
+       return up;
    }
-
-   return match;
-
+   /* No match. */
+   return -1;
 }
 
+
+int match(string stream, struct keynode *node) {
+/*
+ * Match the current position of the stream with
+ * the key tree. Return -1 if no match is found,
+ * and the key index otherwise.
+ */
+
+   char c = stream[0];
+   int i = 0;
+   int charmatch, keymatch = -1;
+
+   do {
+      if ((*node).key > -1) {
+         keymatch = (*node).key;
+      }
+      /* Find char match. */
+      charmatch = find(c, (*node).chars);
+      if (charmatch > -1) {
+         node = (*node).children[charmatch];
+         c = stream[++i];
+      }
+   }
+  /*
+   * Continue until no character matches. Leaf 
+   * nodes can't match, which stop the loop.
+   */
+   while (charmatch > -1);
+
+   return keymatch;
+
+}
 
 
 int main (int argc, string argv[]) {

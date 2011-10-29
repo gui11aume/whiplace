@@ -11,7 +11,8 @@ typedef struct {
    int pos;
 } buffin;
 
-
+int count_lines(FILE*);
+void split(string*, string*, char);
 void strsort(string*, int);
 string shift (FILE*, int);
 

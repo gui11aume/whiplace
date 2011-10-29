@@ -4,6 +4,62 @@
 #include "dynstring.h"
 
 
+int count_lines(FILE *keyfile) {
+/* 
+ * Use 'fgets' to run through the lines of keyfile.
+ * We need a big buffer to ensure that we hit an end of line
+ * on every call. The cost in memory is 65 Kb, which are freed
+ * upon return. This is affordable. This code is almost as
+ * fast as UNIX 'wc -l', and much faster than reading characters
+ * one by one.
+ */
+
+   int lc = 0;
+   char buffer[BUFFER_SIZE];
+
+  /* Reset, just in case. */ 
+   fseek(keyfile, 0, SEEK_SET);
+
+  /* Count lines and reset. */
+   while(fgets(buffer, sizeof(buffer), keyfile) != NULL) lc++;
+   fseek(keyfile, 0, SEEK_SET);
+
+   return lc;
+
+}
+
+void split(string* keys, string* values, char c) {
+/* 
+ * Split key-value pairs on char c. Keys and values are
+ * read and sorted together as a single line for speed
+ * and memory efficiency. They are separated on the
+ * first char c by replacing it with '\0' and the value
+ * pointer is assigned to the next character.
+ */
+
+   int i, j, no_c;
+
+   /* Run through the keys. */
+   for (i = 0 ; keys[i] != NULL ; i++) {
+      no_c = 1;
+      for (j = 0 ; j < strlen(keys[i]) ; j++) {
+         if (keys[i][j] == c) {
+           /* Found char c. */
+            keys[i][j] = '\0';
+            values[i] = keys[i] + j+1;
+            no_c = 0;
+            break;
+         }
+      }
+      if (no_c) {
+         /* Ooops, forgot the tab? */
+         fprintf(stderr, "no %c in line %d (%s)\n", c, i+1, keys[i]);
+         exit(EXIT_FAILURE);
+      }     
+   }
+}
+
+
 int strings_comp(const void *a, const void *b) { 
 /* Comparison function for arrays of strings. */
 
