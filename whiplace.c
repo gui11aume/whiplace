@@ -20,15 +20,16 @@ struct keyval {
 
 /* Search-tree node. */
 struct keynode {
-   int key; // The key index, if any.
-   char *chars;
+   char branch;   // Whether node branches.
+   int key;       // The key index, or -1.
+   char *chars;   // Characters to match.
    struct keynode **children;
 };
 
 
 /* Function declarations. */
 struct keyval get_key_values (FILE*);
-struct keynode build_tree(struct keynode*, int, const int,
+void build_tree(struct keynode*, int, const int,
       const string*, const int);
 int find_char(const char, const string);
 int match(const string, struct keynode*);
@@ -86,7 +87,7 @@ struct keyval get_key_values (FILE *keyfile) {
 }
 
 
-struct keynode build_tree(struct keynode *thisnode, int down, const int up,
+void build_tree(struct keynode *thisnode, int down, const int up,
       const string *keys, const int depth) {
 /* Recursively build a key search-tree of keynodes. */
 
@@ -99,7 +100,6 @@ struct keynode build_tree(struct keynode *thisnode, int down, const int up,
    * is specified (and the key is skipped).
    */
    (*thisnode).key = (keys[down][depth] == '\0') ? down++ : -1;
-
 
    /* -- DRY function for memory allocation. -- */
    void allocate(int k) {
@@ -119,7 +119,7 @@ struct keynode build_tree(struct keynode *thisnode, int down, const int up,
    /* -- End of DRY function. -- */
 
 
-   if (down > up) { 
+  if (down > up) { 
   /* This is a leaf node. */
       allocate(0);
    }
@@ -158,6 +158,31 @@ struct keynode build_tree(struct keynode *thisnode, int down, const int up,
          build_tree((*thisnode).children[i], min[i], max[i],
             keys, depth + 1);
       }
+   }
+
+  /* Node merging on the way back from recursion. */
+   if (strlen((*thisnode).chars) == 1) {
+      (*thisnode).branch = 0;
+      const struct keynode child = (*(*thisnode).children[0]);
+      if ((child.branch == 0) && (child.key == -1)) {
+        /* Merge this node and its (unique) child. */
+
+        /* Concatenate characters in tmp array. */
+         strcpy(chars + 1, (*(*thisnode).children[0]).chars);
+        /* Reallocate and copy characters. */
+//         free((*thisnode).chars);
+         (*thisnode).chars = (char *) malloc((strlen(chars) + 1) * sizeof(char));
+         strcpy((*thisnode).chars, chars);
+
+        /* Point to grand-child and erase child. */
+         struct keynode *grandChild = (*(*thisnode).children[0]).children[0];
+//         free((*thisnode).children[0]);
+         (*thisnode).children[0] = grandChild;
+      }
+   }
+   else {
+     /* Note that leaf nodes are considered to branch. */
+      (*thisnode).branch = 1;
    }
 }
 
@@ -201,6 +226,27 @@ int find_char(const char c, const string sorted_keys) {
 }
 
 
+int keycomp (string stream, string key) {
+/* 
+ * Compare a key to a stream. Return -1, if no match is
+ * found in the stream, the length of the key otherwise.
+ */
+
+   int i = 0;
+
+   while (key[i] == stream[i]) {
+      i++;
+      if (key[i] == '\0') {
+        /* Matched until end of key. */
+         return i;
+      }
+   }
+
+  /* Did not match. */
+   return -1;
+
+}
+
 
 int match(const string stream, struct keynode *node) {
 /*
@@ -210,25 +256,34 @@ int match(const string stream, struct keynode *node) {
  */
 
    char c = stream[0];
-   int i = 0;
+   int j, i = 0;
    int charmatch, keymatch = -1;
-
    do {
       if ((*node).key > -1) {
          keymatch = (*node).key;
       }
       /* Find char match. */
-      charmatch = find_char(c, (*node).chars);
-      if (charmatch > -1) {
+      if ((*node).branch) {
+        /* Node is a branch: find where to go next */
+         charmatch = find_char(c, (*node).chars);
+         j = 1;
+      }
+      else {
+        /* Node is a stem: check whether it matches stream. */
+         j = keycomp(stream + i, (*node).chars);
+         charmatch = 0;
+      }
+      if ((charmatch > -1) && (j > -1)) {
          node = (*node).children[charmatch];
-         c = stream[++i];
+         i += j; // 1 if branch, key length otherwise.
+         c = stream[i];
       }
    }
   /*
    * Continue until no character matches. Leaf 
    * nodes can't match, which stop the loop.
    */
-   while (charmatch > -1);
+   while ((charmatch > -1) && (j > -1));
 
    return keymatch;
 
@@ -280,9 +335,9 @@ int main (int argc, string argv[]) {
 
    build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
 
-
    /* whiplace. */
    string buffer = (string) shift(streamf, 0);
+
 
    while (buffer[0] != '\0') {
       i = match(buffer, root);
