@@ -29,6 +29,7 @@ struct keynode {
 
 /* Function declarations. */
 struct keyval get_key_values (FILE*);
+struct keynode *newnode(void);
 void build_tree(struct keynode*, int, const int,
       const string*, const int);
 int find_char(const char, const string);
@@ -87,34 +88,56 @@ struct keyval get_key_values (FILE *keyfile) {
 }
 
 
+struct keynode *newnode(void) {
+/*
+ * Node creation function. Proper initialization is
+ * required to later reclaim the allocated memory.
+ */
+   struct keynode *new = NULL; // Initialization.
+   new = malloc(sizeof(struct keynode));
+   if (new != NULL) {
+      new->branch = 1;
+      new->key = -1;
+      new->chars = NULL;
+      new->children = NULL;
+   }
+   else {
+      fprintf(stderr, "memory error\n");
+      exit(EXIT_FAILURE);
+   }
+   return new;
+}
+
+
 void build_tree(struct keynode *thisnode, int down, const int up,
       const string *keys, const int depth) {
 /* Recursively build a key search-tree of keynodes. */
 
   /* Temp arrays. */
-   char chars[256];
    int min[256], max[256];
+  /* Allocate too much. Will realloc() later. */
+   thisnode->chars = (string) malloc(256);
 
   /*
    * If a key finishes here, the key index
    * is specified (and the key is skipped).
    */
-   (*thisnode).key = (keys[down][depth] == '\0') ? down++ : -1;
+   if (keys[down][depth] == '\0') {
+      thisnode->key = down++;
+   }
 
    /* -- DRY function for memory allocation. -- */
    void allocate(int k) {
      /* Allocate memory for characters and children. */ 
-      (*thisnode).chars = (char * const) malloc((k+1) * sizeof(char));
-      (*thisnode).children = \
-         (struct keynode ** const) malloc((k+1) * sizeof(struct keynode *));
-      if (((*thisnode).chars == NULL) || ((*thisnode).children == NULL)) {
+      thisnode->children = \
+         (struct keynode **) calloc(k+1, sizeof(struct keynode *));
+      if (thisnode->children == NULL) {
          fprintf(stderr, "memory error\n");
          exit(EXIT_FAILURE);
       } 
      /* Add the sentinels. */
-      chars[k] = '\0';
-      strcpy((*thisnode).chars, chars);
-      (*thisnode).children[k] = NULL;
+      thisnode->chars[k] = '\0';
+      thisnode->children[k] = NULL;
    }
    /* -- End of DRY function. -- */
 
@@ -127,15 +150,15 @@ void build_tree(struct keynode *thisnode, int down, const int up,
   /* Not a leaf node. */
 
       int i, j = 0;
-      chars[0] = keys[down][depth];
+      thisnode->chars[0] = keys[down][depth];
       min[0] = max[0] = down;
 
      /* Gather and count letters at given depth. */
       for (i = down + 1 ; i < up + 1 ; i++) {
-         if (chars[j] !=  keys[i][depth]) {
+         if (thisnode->chars[j] !=  keys[i][depth]) {
            /* New character. */
             j++;
-            chars[j] = keys[i][depth];
+            thisnode->chars[j] = keys[i][depth];
             min[j] = max[j] = i;
          }
          else {
@@ -144,45 +167,37 @@ void build_tree(struct keynode *thisnode, int down, const int up,
          }
       }
 
-     /* Allocate memory for children. */
+     /* Allocate memory for (j+1) children. */
       allocate(j+1);
 
      /* Depth-first recursion. */
       for (i = 0 ; i < j + 1 ; i++) {
-         (*thisnode).children[i] = \
-            (struct keynode * const) malloc (sizeof(struct keynode *));
-         if ((*thisnode).children[i] == NULL) {
-            fprintf(stderr, "memory error\n");
-            exit(EXIT_FAILURE);
-         } 
-         build_tree((*thisnode).children[i], min[i], max[i],
+         thisnode->children[i] = newnode();
+         build_tree(thisnode->children[i], min[i], max[i],
             keys, depth + 1);
       }
    }
 
   /* Node merging on the way back from recursion. */
-   if (strlen((*thisnode).chars) == 1) {
-      (*thisnode).branch = 0;
-      const struct keynode child = (*(*thisnode).children[0]);
-      if ((child.branch == 0) && (child.key == -1)) {
-        /* Merge this node and its (unique) child. */
 
+   if (strlen(thisnode->chars) == 1) {
+      (*thisnode).branch = 0;
+      const struct keynode *child = thisnode->children[0];
+
+     /* Merge this node if it has only one child. */
+      if ((child->branch == 0) && (child->key == -1)) {
         /* Concatenate characters in tmp array. */
-         strcpy(chars + 1, (*(*thisnode).children[0]).chars);
-        /* Reallocate and copy characters. */
-//         free((*thisnode).chars);
-         (*thisnode).chars = (char *) malloc((strlen(chars) + 1) * sizeof(char));
-         strcpy((*thisnode).chars, chars);
+         strcpy(thisnode->chars + 1, child->chars);
+
+        /* Reallocate memory. */
+         thisnode->chars = \
+             realloc(thisnode->chars, strlen(thisnode->chars)+1);
 
         /* Point to grand-child and erase child. */
-         struct keynode *grandChild = (*(*thisnode).children[0]).children[0];
-//         free((*thisnode).children[0]);
-         (*thisnode).children[0] = grandChild;
+         struct keynode *grandChild = child->children[0];
+         free(thisnode->children[0]);
+         thisnode->children[0] = grandChild;
       }
-   }
-   else {
-     /* Note that leaf nodes are considered to branch. */
-      (*thisnode).branch = 1;
    }
 }
 
@@ -296,7 +311,7 @@ int main (int argc, string argv[]) {
    int i;
    string keyfname = NULL;
 
-   /* Options and arguments processing. */
+  /* Options and arguments processing. */
 
    if ((argc < 2) || (argc > 3)) {
       fprintf(stderr, USAGE);
@@ -319,30 +334,33 @@ int main (int argc, string argv[]) {
       exit(EXIT_FAILURE);
    }
 
-   /* (End of option parsing). */
+  /* (End of option parsing). */
 
-   /* Get and sort keys + values. */
+  /* Get and sort keys + values. */
    const struct keyval kv = get_key_values(keyfile);
    close(keyfile);
 
-   /* Build the key tree. */
-   struct keynode * const root = \
-         (struct keynode *) malloc(sizeof(struct keynode));
-   if (root == NULL) {
-      fprintf(stderr, "memory error\n");
-      exit(EXIT_FAILURE);
+  /* Check key duplicates. */
+   for (i = 0 ; i < kv.nkeys -2; i++) {
+      if (strcmp(kv.keys[i], kv.keys[i+1]) == 0) {
+         fprintf(stderr, "key '%s' duplicated\n", kv.keys[i]);
+         exit(EXIT_FAILURE);
+      }
    }
+
+  /* Build the key tree. */
+   struct keynode * const root = newnode();
 
    build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
 
-   /* whiplace. */
+  /* whiplace. */
    string buffer = (string) shift(streamf, 0);
 
 
    while (buffer[0] != '\0') {
       i = match(buffer, root);
       if (i > -1) {
-         /* Found a match. */
+        /* Found a match. */
          fprintf(stdout, "%s", kv.values[i]);
          buffer = (string) shift(streamf, strlen(kv.keys[i]));
       }
@@ -352,7 +370,7 @@ int main (int argc, string argv[]) {
       }
    }
 
-   /* Wrap up. */
+  /* Wrap up. */
    close(streamf);
    fflush(stdout);
 
