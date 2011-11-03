@@ -306,24 +306,29 @@ int whip(const string stream, struct keynode *node) {
 
 void whiplace (string keyfname, string stream, string out) {
 
-   FILE *keyfile = fopen(keyfname, "r");
+   FILE *keyf = fopen(keyfname, "r");
    FILE *streamf = stream == NULL ? stdin : fopen(stream, "r");
    FILE *outf = out == NULL ? stdout : fopen(out, "w");
 
-   if (!keyfile) {
-      fprintf(stderr, "cannot open file %s\n", keyfname);
+   if (keyf == NULL) {
+      fprintf(stderr, "cannot open key file %s\n", keyfname);
       exit(EXIT_FAILURE);
    }
 
    if (streamf == NULL) {
-      fprintf(stderr, "cannot open file %s\n", keyfname);
+      fprintf(stderr, "cannot open stream %s\n", stream);
+      exit(EXIT_FAILURE);
+   }
+
+   if (outf == NULL) {
+      fprintf(stderr, "cannot open file %s for writing\n", out);
       exit(EXIT_FAILURE);
    }
 
    int i;
 
   /* Get and sort keys + values. */
-   const struct keyval kv = get_key_values(keyfile);
+   const struct keyval kv = get_key_values(keyf);
 
   /* Check key duplicates. */
    for (i = 0 ; i < kv.nkeys -2; i++) {
@@ -354,7 +359,7 @@ void whiplace (string keyfname, string stream, string out) {
    }
   /* Wrap up. */
    fflush(outf);
-   close(keyfile);
+   close(keyf);
    close(streamf);
    close(out);
 
