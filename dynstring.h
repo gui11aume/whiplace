@@ -1,3 +1,7 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #ifndef _dynstring_h
 #define _dynstring_h
 
@@ -5,13 +9,6 @@
 
 typedef char *string;
 
-/*
-typedef struct {
-   string uffer;
-   int size;
-   int pos;
-} buffin;
-*/
 int count_lines(FILE*);
 void split(const string*, string*, const char);
 void strsort(string*, const int);

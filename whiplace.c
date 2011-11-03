@@ -1,38 +1,11 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include "dynstring.h"
+#include "whiplace.h"
 
 /*
 whiplace: multiple stream replacement
 USAGE:
   whiplace keyfile targetfile
 */
-
-/* Array of key-value pairs. */
-struct keyval {
-   string *keys;
-   string *values;
-   int nkeys;
-};
-
-/* Search-tree node. */
-struct keynode {
-   char branch;   // Whether node branches.
-   int key;       // The key index, or -1.
-   char *chars;   // Characters to match.
-   struct keynode **children;
-};
-
-
-/* Function declarations. */
-struct keyval get_key_values (FILE*);
-struct keynode *newnode(void);
-void build_tree(struct keynode*, int, const int,
-      const string*, const int);
-int find_char(const char, const string);
-int whip(const string, struct keynode*);
-
 
 
 
@@ -68,8 +41,6 @@ struct keyval get_key_values (FILE *keyfile) {
   /* Sentinels */
    keys[i] = NULL;
    values[i] = NULL;
-
-   fclose(keyfile);
 
   /* Sort ans split the key-values strings. */
    strsort(keys, nkeys);
@@ -304,26 +275,7 @@ int whip(const string stream, struct keynode *node) {
 
 
 
-void whiplace (string keyfname, string stream, string out) {
-
-   FILE *keyf = fopen(keyfname, "r");
-   FILE *streamf = stream == NULL ? stdin : fopen(stream, "r");
-   FILE *outf = out == NULL ? stdout : fopen(out, "w");
-
-   if (keyf == NULL) {
-      fprintf(stderr, "cannot open key file %s\n", keyfname);
-      exit(EXIT_FAILURE);
-   }
-
-   if (streamf == NULL) {
-      fprintf(stderr, "cannot open stream %s\n", stream);
-      exit(EXIT_FAILURE);
-   }
-
-   if (outf == NULL) {
-      fprintf(stderr, "cannot open file %s for writing\n", out);
-      exit(EXIT_FAILURE);
-   }
+void whiplace (FILE *keyf, FILE *streamf, FILE *outf) {
 
    int i;
 
@@ -357,13 +309,8 @@ void whiplace (string keyfname, string stream, string out) {
          buffer = (string) shift(streamf, 1);
       }
    }
-  /* Wrap up. */
-   fflush(outf);
-   close(keyf);
-   close(streamf);
-   close(out);
 
-   exit(EXIT_SUCCESS);
+   return;
 
 }
 
@@ -385,13 +332,38 @@ int main (int argc, string argv[]) {
    string keyfname = NULL;
 
    keyfname = argv[1];
-   string stream = argc > 2 ? argv[2] : NULL;
-   string out = argc > 3 ? argv[3] : NULL;
+   string fname = argc > 2 ? argv[2] : NULL;
+   string outfname = argc > 3 ? argv[3] : NULL;
+
+   FILE *keyf = fopen(keyfname, "r");
+   FILE *streamf = (fname == NULL) ? stdin : fopen(fname, "r");
+   FILE *outf = (outfname == NULL) ? stdout : fopen(outfname, "w");
+
+   if (keyf == NULL) {
+      fprintf(stderr, "cannot open key file %s\n", keyfname);
+      exit(EXIT_FAILURE);
+   }
+
+   if (streamf == NULL) {
+      fprintf(stderr, "cannot open stream %s\n", fname);
+      exit(EXIT_FAILURE);
+   }
+
+   if (outf == NULL) {
+      fprintf(stderr, "cannot open file %s for writing\n", outfname);
+      exit(EXIT_FAILURE);
+   }
 
   /* (End of option parsing). */
 
-   whiplace(keyfname, stream, out);
+   whiplace(keyf, streamf, outf);
 
-   return 0;
+  /* Wrap up. */
+   fflush(outf);
+   fclose(keyf);
+   fclose(streamf);
+   fclose(outf);
+
+   exit(EXIT_SUCCESS);
 
 }
