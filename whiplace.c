@@ -3,13 +3,11 @@
 #include <stdlib.h>
 #include "dynstring.h"
 
-
-#define USAGE "\n\
-whiplace: multiple stream replacement\n\
-\n\
-USAGE:\n\
-   whiplace keyfile targetfile\n\n"
-
+/*
+whiplace: multiple stream replacement
+USAGE:
+  whiplace keyfile targetfile
+*/
 
 /* Array of key-value pairs. */
 struct keyval {
@@ -33,7 +31,7 @@ struct keynode *newnode(void);
 void build_tree(struct keynode*, int, const int,
       const string*, const int);
 int find_char(const char, const string);
-int match(const string, struct keynode*);
+int whip(const string, struct keynode*);
 
 
 
@@ -263,7 +261,7 @@ int keycomp (string stream, string key) {
 }
 
 
-int match(const string stream, struct keynode *node) {
+int whip(const string stream, struct keynode *node) {
 /*
  * Match the current position of the stream with
  * the key tree. Return -1 if no match is found,
@@ -306,39 +304,26 @@ int match(const string stream, struct keynode *node) {
 
 
 
-int main (int argc, string argv[]) {
+void whiplace (string keyfname, string stream, string out) {
 
-   int i;
-   string keyfname = NULL;
-
-  /* Options and arguments processing. */
-
-   if ((argc < 2) || (argc > 3)) {
-      fprintf(stderr, USAGE);
-      exit(EXIT_FAILURE);
-   }
-
-   keyfname = argv[1];
    FILE *keyfile = fopen(keyfname, "r");
-   FILE *streamf = argc == 2 ? stdin : fopen(argv[2], "r");
+   FILE *streamf = stream == NULL ? stdin : fopen(stream, "r");
+   FILE *outf = out == NULL ? stdout : fopen(out, "w");
 
    if (!keyfile) {
       fprintf(stderr, "cannot open file %s\n", keyfname);
-      fprintf(stderr, USAGE);
       exit(EXIT_FAILURE);
    }
 
    if (streamf == NULL) {
-      fprintf(stderr, "cannot open file %s\n", argv[2]);
-      fprintf(stderr, USAGE);
+      fprintf(stderr, "cannot open file %s\n", keyfname);
       exit(EXIT_FAILURE);
    }
 
-  /* (End of option parsing). */
+   int i;
 
   /* Get and sort keys + values. */
    const struct keyval kv = get_key_values(keyfile);
-   close(keyfile);
 
   /* Check key duplicates. */
    for (i = 0 ; i < kv.nkeys -2; i++) {
@@ -350,29 +335,58 @@ int main (int argc, string argv[]) {
 
   /* Build the key tree. */
    struct keynode * const root = newnode();
-
    build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
 
-  /* whiplace. */
+  /* Let it whip! */
    string buffer = (string) shift(streamf, 0);
 
-
    while (buffer[0] != '\0') {
-      i = match(buffer, root);
+      i = whip(buffer, root);
       if (i > -1) {
         /* Found a match. */
-         fprintf(stdout, "%s", kv.values[i]);
+         fprintf(outf, "%s", kv.values[i]);
          buffer = (string) shift(streamf, strlen(kv.keys[i]));
       }
       else {
-         fprintf(stdout, "%c", buffer[0]);
+         fprintf(outf, "%c", buffer[0]);
          buffer = (string) shift(streamf, 1);
       }
    }
-
   /* Wrap up. */
+   fflush(outf);
+   close(keyfile);
    close(streamf);
-   fflush(stdout);
+   close(out);
 
    exit(EXIT_SUCCESS);
+
+}
+
+int main (int argc, string argv[]) {
+
+   string USAGE = "\n"
+"whiplace: multiple stream replacement\n\n"
+"USAGE:\n"
+"   whiplace keyfile targetfile\n\n";
+
+
+  /* Options and arguments processing. */
+
+   if ((argc < 2) || (argc > 4)) {
+      fprintf(stderr, USAGE);
+      exit(EXIT_FAILURE);
+   }
+
+   string keyfname = NULL;
+
+   keyfname = argv[1];
+   string stream = argc > 2 ? argv[2] : NULL;
+   string out = argc > 3 ? argv[3] : NULL;
+
+  /* (End of option parsing). */
+
+   whiplace(keyfname, stream, out);
+
+   return 0;
+
 }
