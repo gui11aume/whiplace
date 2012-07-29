@@ -3,32 +3,29 @@
 #include <string.h>
 #include "dynstring.h"
 
-#ifndef _whiplace_h
-#define _whiplace_h
+#ifndef _WHIPLACE_H
+#define _WHIPLACE_H
 
+#define IO_BUFFER_SIZE 65536
 
-/* Array of key-value pairs. */
+/* Key-value pairs. */
 struct keyval {
-   string *keys;
-   string *values;
-   int nkeys;
+   char **keys;
+   char **values;
+   int nitems;
 };
 
-/* Search-tree node. */
-struct keynode {
-    char branch;    // Whether node branches.
-    int key;        // The key index, or -1.
-    string chars;   // Characters to match.
-    struct keynode **children;
+/***********************************************************************
+  Trie nodes contain a single character sub-key, a key index and a list 
+  of child nodes. A tail node is the last node in a path that matches a 
+  key. Non tail nodes have an invalid 'keyid' value equal to -1, tail   
+  nodes have a valid 'keyid' index. Tail nodes do not need to be leaves 
+  because they can have child nodes if the key prefixes another key.    
+***********************************************************************/
+struct trienode {
+    char subkey;
+    int  keyid;        
+    struct node **childnodes;
 };
-
-
-struct keyval get_key_values (FILE*);
-struct keynode *newnode(void);
-void build_tree(struct keynode*, int, const int,
-            const string*, const int);
-int find_char(const char, const string);
-int whip(const string, struct keynode*);
-void whiplace(FILE*, FILE*, FILE*);
 
 #endif

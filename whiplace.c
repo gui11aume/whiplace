@@ -1,5 +1,6 @@
-#include "dynstring.h"
-#include "whiplace.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 /*
 whiplace: multiple stream replacement
@@ -7,49 +8,88 @@ USAGE:
   whiplace keyfile targetfile
 */
 
+void exit_memory_failure(void) {
+   fprintf(stderr, "memory error\n");
+   exit(EXIT_FAILURE);
+}
+
+void exit_no_sep_failure(char *s) {
+   fprintf(stderr, "character separator not found in line %s\n", s);
+   exit(EXIT_FAILURE);
+}
+
+int cmp_wrapper(const void *a, const void *b) {
+   const char **ia = (const char **) a;
+   const char **ib = (const char **) b;
+   return strcmp(*ia, *ib);
+}
 
 
-struct keyval get_key_values (FILE *keyfile) {
-/* Read in key-value pairs from file, one pair per line. */
+void symsplit(char **keys, char **values, const char c) {
+// Symbolic split of key-value pairs on char 'c'. Keys and values are
+// The first occurence of 'c' is replaced by '\0' and the pointer in
+// 'values' is assigned to the next character. Pointers in 'keys' and
+// 'values' at the same index point to different positions of the same
+// string.
 
-   const int nkeys = count_lines(keyfile);
-   string *keys = (string * const) malloc((nkeys+1) * sizeof(string));
-   string *values = (string * const) malloc((nkeys+1) * sizeof(string));
-   if ((keys == NULL) || (values == NULL)) {
-      fprintf(stderr, "memory error\n");
-      exit(EXIT_FAILURE);
+   int i, j;
+
+   // Iterate over 'keys' array.
+   for (i = 0 ; keys[i] != NULL ; i++) {
+      for (j = 0 ; keys[i][j] != c ; j++)
+         if (keys[i][j] == '\0') exit_no_sep_failure(keys[i]);
+      keys[i][j] = '\0';
+      values[i] = keys[i] + j+1;
    }
 
-   string line;
-   int j, i = 0;
+}
 
-   /* Read and chomp lines from key file. */
-   while ((line = readline(keyfile, 1)) != NULL) {
+struct keyval get_key_values (FILE *f) {
+// Read in key-value pairs from file, one pair per line.
 
-      /* Allocate memory for key + value. */
-      char *curPtr = (string) malloc((strlen(line) + 1) * sizeof(char));
-      if (curPtr == NULL) {
-         fprintf(stderr, "memory error\n");
-         exit(EXIT_FAILURE);
-      }
+   char iob[IO_BUFFER_SIZE];
+   int nitems = 0;
 
-      strcpy(curPtr, line);
-      keys[i++] = curPtr;
+   // Count lines. Hope to hit '\n' on every call to 'fgets'.
+   // If not, overestimate 'nitems' and assign too much memory.
+   fseek(f, 0, SEEK_SET);
+   while(fgets(iob, IO_BUFFER_SIZE, f) != NULL) nitems++;
+
+   char **keys = (char **) malloc((nitems+1) * sizeof(char *));
+   char **values = (char **) malloc((nitems+1) * sizeof(char *));
+
+   if ((keys == NULL) || (values == NULL)) exit_memory_failure();
+
+   int len, i = 0;
+
+   // Read file again and copy lines to 'keys'.
+   fseek(f, 0, SEEK_SET);
+   while (fgets(iob, IO_BUFFER_SIZE, f) != NULL) {
+
+      len = strlen(iob);
+      // Chomp (replace '\n' by '\0').
+      if (iob[len-1] == '\n') iob[--len] = '\0';
+      char *temp = (char *) malloc((len+1) * sizeof(char));
+
+      if (temp == NULL) exit_memory_failure();
+
+      strcpy(temp, iob);
+      keys[i++] = temp;
 
    }
 
-  /* Sentinels */
+   // Add sentinels.
    keys[i] = NULL;
    values[i] = NULL;
 
-  /* Sort ans split the key-values strings. */
-   strsort(keys, nkeys);
-   split(keys, values, '\t');
+   // Split the key/value on tab character and sort.
+   symsplit(keys, values, '\t');
+   qsort(keys, nitems, sizeof(char *), cmp_wrapper);
 
    struct keyval kv = { 
-      .keys = keys, 
-      .values = values,
-      .nkeys = nkeys
+      .keys    = keys, 
+      .values  = values,
+      .nitems  = nitems
    };
 
    return kv;
@@ -57,75 +97,61 @@ struct keyval get_key_values (FILE *keyfile) {
 }
 
 
-struct keynode *newnode(void) {
-/*
- * Node creation function. Proper initialization is
- * required to later reclaim the allocated memory.
- */
-   struct keynode *new = NULL; // Initialization.
-   new = malloc(sizeof(struct keynode));
-   if (new != NULL) {
-      new->branch = 1;
-      new->key = -1;
-      new->chars = NULL;
-      new->children = NULL;
-   }
-   else {
-      fprintf(stderr, "memory error\n");
-      exit(EXIT_FAILURE);
-   }
+struct trienode *create_node(void) {
+   struct trienode *new_node = NULL; // Required to reclaim memory.
+   new_node = malloc(sizeof(struct trienode));
+   if (new == NULL) exit_memory_failure();
+   new_node->key_index = -1;
+   new_node->chars = NULL;
+   new_node->children = NULL;
+
    return new;
 }
 
 
-void build_tree(struct keynode *thisnode, int down, const int up,
-      const string *keys, const int depth) {
-/* Recursively build a key search-tree of keynodes. */
+void build_trie(struct trienode *thisnode, int down, const int up,
+      const char **keys, const int depth) {
+// 'thisnode': current node.
+//       'up': upper limit of key index for descent of current node.
+//     'down': lower limit of key index for descent of current node.
+//     'keys': whiplace key set.
+//    'depth': depth of current node in the trie.
 
-  /* Temp arrays. */
+   // Temp arrays.
    int min[256], max[256];
-  /* Allocate too much. Will realloc() later. */
-   thisnode->chars = (string) malloc(256);
+   // Allocate too much. Will realloc() later.
+   thisnode->chars = (char *) malloc(256 * sizeof(char));
 
-  /*
-   * If a key finishes here, the key index
-   * is specified (and the key is skipped).
-   */
-   if (keys[down][depth] == '\0') {
-      thisnode->key = down++;
-   }
+   // Specify key index if a key finishes here (and skip the key).
+   if (keys[down][depth] == '\0') thisnode->key = down++;
 
-   /* -- DRY function for memory allocation. -- */
+   // Here function.
    void allocate(int k) {
-     /* Allocate memory for characters and children. */ 
+      // Allocate memory for characters and children.
       thisnode->children = \
-         (struct keynode **) calloc(k+1, sizeof(struct keynode *));
-      if (thisnode->children == NULL) {
-         fprintf(stderr, "memory error\n");
-         exit(EXIT_FAILURE);
-      } 
-     /* Add the sentinels. */
+         (struct trienode **) calloc(k+1, sizeof(struct trienode *));
+      if (thisnode->children == NULL) exit_memory_failure();
+      // Add the sentinels.
       thisnode->chars[k] = '\0';
       thisnode->children[k] = NULL;
    }
-   /* -- End of DRY function. -- */
 
 
   if (down > up) { 
-  /* This is a leaf node. */
+  // This is a leaf node.
       allocate(0);
-   }
-   else {
-  /* Not a leaf node. */
+  }
+  else {
+  // This is a branch node.
 
       int i, j = 0;
-      thisnode->chars[0] = keys[down][depth];
+      thisnode.chr = keys[down][depth];
       min[0] = max[0] = down;
 
-     /* Gather and count letters at given depth. */
+      // Gather and count letters at given depth.
       for (i = down + 1 ; i < up + 1 ; i++) {
-         if (thisnode->chars[j] !=  keys[i][depth]) {
-           /* New character. */
+         if (thisnode.chr !=  keys[i][depth]) {
+            // New character.
             j++;
             thisnode->chars[j] = keys[i][depth];
             min[j] = max[j] = i;
@@ -136,36 +162,14 @@ void build_tree(struct keynode *thisnode, int down, const int up,
          }
       }
 
-     /* Allocate memory for (j+1) children. */
+      // Allocate memory for (j+1) children.
       allocate(j+1);
 
-     /* Depth-first recursion. */
+      // Depth-first recursion.
       for (i = 0 ; i < j + 1 ; i++) {
          thisnode->children[i] = newnode();
          build_tree(thisnode->children[i], min[i], max[i],
             keys, depth + 1);
-      }
-   }
-
-  /* Node merging on the way back from recursion. */
-
-   if (strlen(thisnode->chars) == 1) {
-      (*thisnode).branch = 0;
-      const struct keynode *child = thisnode->children[0];
-
-     /* Merge this node if it has only one child. */
-      if ((child->branch == 0) && (child->key == -1)) {
-        /* Concatenate characters in tmp array. */
-         strcpy(thisnode->chars + 1, child->chars);
-
-        /* Reallocate memory. */
-         thisnode->chars = \
-             realloc(thisnode->chars, strlen(thisnode->chars)+1);
-
-        /* Point to grand-child and erase child. */
-         struct keynode *grandChild = child->children[0];
-         free(thisnode->children[0]);
-         thisnode->children[0] = grandChild;
       }
    }
 }
@@ -232,7 +236,7 @@ int keycomp (string stream, string key) {
 }
 
 
-int whip(const string stream, struct keynode *node) {
+int whip(const string stream, struct trienode *node) {
 /*
  * Match the current position of the stream with
  * the key tree. Return -1 if no match is found,
@@ -283,7 +287,7 @@ void whiplace (FILE *keyf, FILE *streamf, FILE *outf) {
    const struct keyval kv = get_key_values(keyf);
 
   /* Check key duplicates. */
-   for (i = 0 ; i < kv.nkeys -2; i++) {
+   for (i = 0 ; i < kv.nitems -2; i++) {
       if (strcmp(kv.keys[i], kv.keys[i+1]) == 0) {
          fprintf(stderr, "key '%s' duplicated\n", kv.keys[i]);
          exit(EXIT_FAILURE);
@@ -291,8 +295,8 @@ void whiplace (FILE *keyf, FILE *streamf, FILE *outf) {
    }
 
   /* Build the key tree. */
-   struct keynode * const root = newnode();
-   build_tree(root, 0, kv.nkeys-1, kv.keys, 0);
+   struct trienode * const root = newnode();
+   build_tree(root, 0, kv.nitems-1, kv.keys, 0);
 
   /* Let it whip! */
    string buffer = (string) shift(streamf, 0);

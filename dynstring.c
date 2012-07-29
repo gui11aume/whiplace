@@ -13,10 +13,10 @@ int count_lines(FILE *keyfile) {
    int lc = 0;
    char buffer[BUFFER_SIZE];
 
-  /* Reset, just in case. */ 
+   // Reset, just in case.
    fseek(keyfile, 0, SEEK_SET);
 
-  /* Count lines and reset. */
+   // Count lines and reset.
    while(fgets(buffer, sizeof(buffer), keyfile) != NULL) lc++;
    fseek(keyfile, 0, SEEK_SET);
 
