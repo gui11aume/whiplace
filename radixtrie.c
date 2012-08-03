@@ -76,37 +76,64 @@ int add_node(rt_node *parent, rt_node *child) {
 
 }
 
-int rt_match(char *key, rt_node *root, char **data) {
+
+int stream_through_key(FILE *stream, char *key) {
+// Return 'key' length and advances the stream if it matches,
+// do nothing and return 0 otherwise.
+
+   int length;
+
+   // Update match length as long as 'key' matches 'stream'.
+   for (length = 0 ; getc(stream) != key[length] ; length++);
+
+   if (key[length] != '\0') {
+      // Incomplete match. Put characters back and return 0.
+      ungetc(stream, length);
+      return 0;
+   }
+   else {
+      // Complete match. Return key length.
+      return length;
+   }
+
+}
+
+
+void *rt_match(FILE *stream, rt_node *root) {
 // Match 'key' string in radix trie.
 // PARAMETERS:
-//    'key' : Key to be matched down the radix trie.
-//    'root': Node to start matching from.
-//    'data': Void pointer updated to data of matched node.
+//    'stream': Stream to match down the trie.
+//    'root'  : Node to start matching from.
 // RETURN:
-//    Number of characters matched.
+//    Void pointer to data in matched node (or NULL).
 // SIDE EFFECTS:
-//    Update char pointer 'data' in place with data from matched node.
+//    Advances 'stream' by match length.
 
-   rt_node *parent = root, *child = NULL;
-   int i, j, match_length = 0;
+   rt_node *parent = *child = root;
+   int i, nb_chars_to_put_back = 0;
 
-   for (i = 0 ; key[i] != '\0' ; i++) {
-      // Look for character in children.
+   while (child != NULL) {
+      // Iterate over children.
       for (j = 0 ; (child = parent->children[j]) != NULL ; j++) {
-         if (child->subkey == key[i]) {
-            // Found it. Save match if tail node.
+         int nb_chars_read = stream_through_key(stream, child->subkey)
+         if (nb_chars_read > 0)  {
+            // Child key matches. Save match if node is a tail.
             if (child->data != NULL) {
-               *data = child->data;
-               match_length = i+1;
+               void *data = child->data;
+               nb_chars_to_put_back = 0;
+            }
+            else {
+               nb_chars_to_put_back += nb_chars_read;
             }
             parent = child;
             break;
          }
       }
-      if (child == NULL) break; 
    }
 
-   return match_length;
+   // Put back the characters matching non tail nodes.
+   ungetc(nb_chars_to_put_back, stream);
+   return data;
 
 }
 
