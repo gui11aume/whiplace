@@ -7,9 +7,9 @@ typedef
 struct rt_node
 /************************************************************************
   Radix trie node with the following attributes.                         
-     'subkey' : Single character on a key path.                          
-     'data'   : Char pointer on data for tail node, 'NULL' otherwise     
-     'childen': Array of pointers to child nodes.                        
+     'subkey' : substring on a key path.                                 
+     'data'   : char pointer on data for tail node, 'NULL' otherwise     
+     'childen': array of pointers to child nodes.                        
                                                                          
   The 'children' array is terminated by a 'NULL' slot. A node with a     
   single 'NULL' child node slot is a leaf.                               
@@ -21,7 +21,7 @@ struct rt_node
                                                                          
 ************************************************************************/
 {
-              char   subkey;
+              char   subkey[256];
               char   *data;
     struct rt_node   **children;
 }
@@ -46,8 +46,8 @@ rt_node *create_orphan_node() {
    rt_node **no_child = (rt_node **) malloc(sizeof(rt_node *));
    *no_child = NULL;
 
-   orphan->subkey   = '\0';
-   orphan->data     = NULL;
+   memset(orphan->subkey, '\0', 256);
+   orphan->data = NULL;
    orphan->children = no_child;
 
    return orphan;
@@ -58,7 +58,7 @@ rt_node *create_orphan_node() {
 int add_node(rt_node *parent, rt_node *child) {
 // Return 1 upon success, 0 upon failure.
 
-   // Get current children count.
+   // Set i to current children count.
    int i; for (i = 0 ; parent->children[i] != NULL ; i++);
 
    // Allocate new 'children' array and set the sentinel.
