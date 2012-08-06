@@ -3,6 +3,12 @@
 #include <string.h>
 #include "array_lookup.h"
 
+#ifdef TARGET_OS_MAC
+#include "lib/fmemopen/fmemopen.h"
+#endif
+
+#define MAX_KEY_LENGTH 65536
+
 typedef
 struct rt_node
 /************************************************************************
@@ -21,41 +27,33 @@ struct rt_node
                                                                          
 ************************************************************************/
 {
-              char   subkey[256];
+              char   *subkey;
               char   *data;
     struct rt_node   **children;
 }
 rt_node;
 
 
-typedef
-struct
-{
-              char   **keys;
-              char   **values;
-               int   lower;
-               int   upper;
-               int   depth;
-}
-key_range;
 
-
-rt_node *create_orphan_node() {
+rt_node *create_orphan_node(char *subkey, char *data) {
 
    rt_node *orphan = (rt_node *) malloc(sizeof(rt_node));
    rt_node **no_child = (rt_node **) malloc(sizeof(rt_node *));
    *no_child = NULL;
 
-   memset(orphan->subkey, '\0', 256);
-   orphan->data = NULL;
+   orphan->subkey = (char *) malloc((1 + strlen(subkey)) * sizeof(char));
+   orphan->data = (char *) malloc((1 + strlen(data)) * sizeof(char));
    orphan->children = no_child;
+
+   strcpy(orpah->subkey, key);
+   strcpy(orpah->data, data);
 
    return orphan;
 
 }
 
 
-int add_node(rt_node *parent, rt_node *child) {
+int add_as_child(rt_node *child, rt_node *parent) {
 // Return 1 upon success, 0 upon failure.
 
    // Set i to current children count.
@@ -78,7 +76,7 @@ int add_node(rt_node *parent, rt_node *child) {
 
 
 int stream_through_key(FILE *stream, char *key) {
-// Return 'key' length and advances the stream if it matches,
+// Return 'key' length and advances the stream if it matches 'stream',
 // do nothing and return 0 otherwise.
 
    int length;
@@ -88,7 +86,7 @@ int stream_through_key(FILE *stream, char *key) {
 
    if (key[length] != '\0') {
       // Incomplete match. Put characters back and return 0.
-      ungetc(stream, length);
+      ungetc(length, stream);
       return 0;
    }
    else {
@@ -99,7 +97,7 @@ int stream_through_key(FILE *stream, char *key) {
 }
 
 
-void *rt_match(FILE *stream, rt_node *root) {
+rt_node *rt_match(FILE *stream, rt_node *root) {
 // Match 'key' string in radix trie.
 // PARAMETERS:
 //    'stream': Stream to match down the trie.
@@ -109,17 +107,20 @@ void *rt_match(FILE *stream, rt_node *root) {
 // SIDE EFFECTS:
 //    Advances 'stream' by match length.
 
-   rt_node *parent = *child = root;
-   int i, nb_chars_to_put_back = 0;
+   rt_node *parent = root;
+   rt_node *child  = root;
+   rt_node *match_node = NULL;
+   int nb_chars_to_put_back = 0;
+   int i;
 
    while (child != NULL) {
       // Iterate over children.
-      for (j = 0 ; (child = parent->children[j]) != NULL ; j++) {
+      for (i = 0 ; (child = parent->children[i]) != NULL ; i++) {
          int nb_chars_read = stream_through_key(stream, child->subkey)
          if (nb_chars_read > 0)  {
             // Child key matches. Save match if node is a tail.
             if (child->data != NULL) {
-               void *data = child->data;
+               match_node = child;
                nb_chars_to_put_back = 0;
             }
             else {
@@ -133,19 +134,43 @@ void *rt_match(FILE *stream, rt_node *root) {
 
    // Put back the characters matching non tail nodes.
    ungetc(nb_chars_to_put_back, stream);
-   return data;
+   return match_node;
 
 }
 
-void build_rt(key_range range, rt_node *node) {
-// Each node comprises key indices between 'lower' and 'upper'.
-// If 'lower' and 'upper' are equal, the node comprises only one
-// key and is a leaf.
+
+void  add_key_to_rt(rt_node *root, char *key, char *data) {
+
+   int i;
+   FILE *key_as_stream = fmemopen(key, MAX_KEY_LENGTH, "r");
+
+   rt_node *node = rt_match(key_as_stream, root);
+   if (node == NULL) node = root;
+
+   char c = fgetc(key_as_stream);
+   ungetc(1, key_as_stream);
+   // Check if key is duplicated.
+   if (c == '\0') return;
+   
+   // Find prefix among siblings.
+   rt_node sibling;
+   for (i = 0 ; (sibling = node->children[i]) != NULL ; i++) {
+      if (sibling->data[0] == c) break;
+   }
+
+   if (sibling == NULL) {
+      rt_node *new_node = create_orphan_node(key_as_strem, data);
+      fread(new_node->subkey, 1, MAX_KEY_LENGTH, newkey);
+      new_node->data = values[id];
+      add_as_child(new_node, match_node);
+   }
+   else {
+      rt_node *
+   }
+}
 
 
-   // Get first character in key range.
-   char c = range.keys[range.lower][range.depth];
-
+   /*
    // Check if 'node' is a tail (there can be only one '\0').
    if (c == '\0') {
       // Copy corresponding value.
@@ -190,6 +215,8 @@ void build_rt(key_range range, rt_node *node) {
    recursion();
 
    return;
+
+   */
 
 }
 

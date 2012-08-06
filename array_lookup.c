@@ -59,7 +59,9 @@ array_lookup generate_array_lookup_from_file (FILE *f) {
 
    // Count lines. Hope to hit '\n' on every call to 'fgets'.
    // If not, overestimate 'item_nb' and assign too much memory.
-   fseek(f, 0, SEEK_SET);
+   // TODO: remove next line if can.
+   // fseek(f, 0, SEEK_SET);
+   rewind(f)
    while(fgets(iob, IO_BUFFER_SIZE, f) != NULL) item_nb++;
 
    // Allocate array memory (keep one slot for sentinel).
@@ -71,7 +73,9 @@ array_lookup generate_array_lookup_from_file (FILE *f) {
    int len, i = 0;
 
    // Read file one more time and copy lines to 'keys' array.
-   fseek(f, 0, SEEK_SET);
+   // TODO: remove next line if can.
+   //fseek(f, 0, SEEK_SET);
+   rewind(f)
    while (fgets(iob, IO_BUFFER_SIZE, f) != NULL) {
 
       len = strlen(iob);
