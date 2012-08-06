@@ -42,11 +42,17 @@ rt_node *create_orphan_node(char *subkey, char *data) {
    *no_child = NULL;
 
    orphan->subkey = (char *) malloc((1 + strlen(subkey)) * sizeof(char));
-   orphan->data = (char *) malloc((1 + strlen(data)) * sizeof(char));
-   orphan->children = no_child;
+   strcpy(orphan->subkey, subkey);
 
-   strcpy(orpah->subkey, key);
-   strcpy(orpah->data, data);
+   if (data != NULL) {
+      orphan->data =(char *) malloc((1 + strlen(data)) * sizeof(char));
+      strcpy(orphan->data, data);
+   }
+   else {
+      orphan->data = NULL;
+   }
+          
+   orphan->children = no_child;
 
    return orphan;
 
@@ -80,17 +86,23 @@ int stream_through_key(FILE *stream, char *key) {
 // do nothing and return 0 otherwise.
 
    int length;
+   fpos_t init_pos;
+   fgetpos(stream, &init_pos);
+   fpos_t match_pos = init_pos;
 
    // Update match length as long as 'key' matches 'stream'.
-   for (length = 0 ; getc(stream) != key[length] ; length++);
+   for (length = 0 ; fgetc(stream) == key[length] ; length++) {
+      fgetpos(stream, &match_pos);
+   }
 
    if (key[length] != '\0') {
       // Incomplete match. Put characters back and return 0.
-      ungetc(length, stream);
+      fsetpos(stream, &init_pos);
       return 0;
    }
    else {
       // Complete match. Return key length.
+      fsetpos(stream, &match_pos);
       return length;
    }
 
@@ -110,21 +122,22 @@ rt_node *rt_match(FILE *stream, rt_node *root) {
    rt_node *parent = root;
    rt_node *child  = root;
    rt_node *match_node = NULL;
-   int nb_chars_to_put_back = 0;
+   int nb_chars_in_excess = 0;
+   int nb_chars_read;
    int i;
 
    while (child != NULL) {
       // Iterate over children.
       for (i = 0 ; (child = parent->children[i]) != NULL ; i++) {
-         int nb_chars_read = stream_through_key(stream, child->subkey)
+         nb_chars_read = stream_through_key(stream, child->subkey);
          if (nb_chars_read > 0)  {
             // Child key matches. Save match if node is a tail.
             if (child->data != NULL) {
                match_node = child;
-               nb_chars_to_put_back = 0;
+               nb_chars_in_excess = 0;
             }
             else {
-               nb_chars_to_put_back += nb_chars_read;
+               nb_chars_in_excess += nb_chars_read;
             }
             parent = child;
             break;
@@ -133,112 +146,67 @@ rt_node *rt_match(FILE *stream, rt_node *root) {
    }
 
    // Put back the characters matching non tail nodes.
-   ungetc(nb_chars_to_put_back, stream);
+   fseek(stream, - nb_chars_in_excess, SEEK_CUR);
    return match_node;
 
 }
 
 
-void  add_key_to_rt(rt_node *root, char *key, char *data) {
+void  add_key(rt_node *root, char *suff, char *data) {
 
-   int i;
-   FILE *key_as_stream = fmemopen(key, MAX_KEY_LENGTH, "r");
-
-   rt_node *node = rt_match(key_as_stream, root);
+   // Find node where to add key suffix.
+   FILE *keystream = fmemopen(suff, MAX_KEY_LENGTH, "r");
+   rt_node *node = rt_match(keystream, root);
    if (node == NULL) node = root;
-
-   char c = fgetc(key_as_stream);
-   ungetc(1, key_as_stream);
-   // Check if key is duplicated.
-   if (c == '\0') return;
-   
-   // Find prefix among siblings.
-   rt_node sibling;
-   for (i = 0 ; (sibling = node->children[i]) != NULL ; i++) {
-      if (sibling->data[0] == c) break;
-   }
-
-   if (sibling == NULL) {
-      rt_node *new_node = create_orphan_node(key_as_strem, data);
-      fread(new_node->subkey, 1, MAX_KEY_LENGTH, newkey);
-      new_node->data = values[id];
-      add_as_child(new_node, match_node);
-   }
-   else {
-      rt_node *
-   }
-}
-
-
-   /*
-   // Check if 'node' is a tail (there can be only one '\0').
-   if (c == '\0') {
-      // Copy corresponding value.
-      int nchar = strlen(range.values[range.lower]);
-      node->data = (char *) malloc((nchar+1) * sizeof(char));
-      strcpy(node->data, range.values[range.lower]);
-      // Skip key and return if it is a leaf.
-      range.lower++;
-      if (range.lower == range.upper) return;
-      else c = range.keys[range.lower][range.depth];
-   }
-
-   key_range child_range = {
-      .keys   = range.keys,
-      .values = range.values,
-      .lower  = range.lower,
-      .upper  = range.lower,
-      .depth  = range.depth + 1,
-   };
-
-   void recursion(void) {
-      rt_node *child = create_orphan_node();
-      child->subkey = c;
-      add_node(node, child);
-      build_rt(child_range, child);
-   }
+   suff += ftell(keystream);
+   fclose(keystream);
 
    int i;
+   int j;
+   char *subkey;
+   char pref[MAX_KEY_LENGTH];
+   rt_node *child;
 
-   for (i = range.lower ; i < range.upper ; i++) {
-      if (c == range.keys[i][range.depth]) child_range.upper++;
-      else {
-         // Found a new character. Recursion and continue.
-         recursion();
-      
-         c = range.keys[i][range.depth];
-         child_range.lower = child_range.upper = i;
+   // If 'suff' shares prefix with a child, add internal node.
+   for (i = 0 ; (child = node->children[i]) != NULL ; i++) {
 
+      subkey = child->subkey;
+      for (j = 0 ; suff[j] != '\0' &&  suff[j] != subkey[j]; j++) {
+         pref[j] = suff[j];
+      }
+      pref[j] = '\0';
+
+      if (j > 0) {
+         child->subkey += j;
+         suff += j;
+         rt_node *internal_node = create_orphan_node(pref, NULL);
+         add_as_child(child, internal_node);
+         node->children[i] = internal_node;
+         node = internal_node;
+         break;
       }
    }
 
-   recursion();
-
-   return;
-
-   */
-
+   rt_node *leaf = create_orphan_node(suff, data);
+   add_as_child(leaf, node);
+   
 }
+
 
 int main(void) {
    FILE *f = fopen("testfile.txt", "r");
    array_lookup lookup = generate_array_lookup_from_file(f);
-   rt_node *root = create_orphan_node();
 
-   key_range range = {
-      .keys   = lookup.keys,
-      .values = lookup.values,
-      .lower  = 0,
-      .upper  = lookup.item_nb,
-      .depth  = 0,
-   };
+   rt_node *root = create_orphan_node("", NULL);
+   int i;
+   for (i = 0 ; i < lookup.item_nb ; i++) {
+      add_key(root, lookup.keys[i], lookup.values[i]);
+   }
 
-   build_rt(range, root);
    dealloc_array_lookup(&lookup);
 
-   char *data = NULL;
-   char key[56] = "ACD";
-   int m = rt_match(key, root, &data);
-   printf("%s->%s\n", key, data);
+   FILE *stream = fmemopen("A", 256, "r");
+   rt_node *match = rt_match(stream, root);
+   printf("%s\n", match->data);
 
 }
