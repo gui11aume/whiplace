@@ -1,2 +1,4 @@
-A	Bob
-AB	Tcon
+Bob Dylan	Bob Dylan
+Bob	Bob the Sponge
+Alice	Bob
+Alice Cooper	Alice Cooper
